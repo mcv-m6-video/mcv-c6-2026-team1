@@ -3,9 +3,10 @@ import os
 import argparse
 import numpy as np
 from tqdm import tqdm
+from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
-from models import SingleGaussianModel
 from video_utils import load_video
+
 
 def pre_process(frame, sigma_s=60, sigma_r=0.4):
     """
@@ -41,6 +42,7 @@ def extract_objects(mask, ioa_thr=0.8):
     # Get boxes ignoring background label (0)
     if len(stats) == 0: return []
     boxes = stats[1:]
+    if len(boxes) == 0: return [] # ignore background
     x1, y1 = boxes[:, 0], boxes[:, 1]
     x2, y2 = x1 + boxes[:, 2], y1 + boxes[:, 3]
     areas = boxes[:, 4]
@@ -79,7 +81,14 @@ def extract_objects(mask, ioa_thr=0.8):
 
     return bounding_boxes
 
-def process_single_test_frame(frame, model):
+def score_bbox(mask, bbox):
+    x1, y1, x2, y2 = bbox
+    roi = mask[y1:y2, x1:x2]
+    if roi.size == 0:
+        return 0.0
+    return float(np.count_nonzero(roi) / roi.size)
+
+def process_single_test_frame(frame, model, ioa_thr=0.8):
     """
     Wraps the entire testing pipeline for a single frame so it can be parallelized.
     """
@@ -88,13 +97,32 @@ def process_single_test_frame(frame, model):
     mask = post_process(mask)
 
     # Object separation
-    bboxes = extract_objects(mask)
-    for (x1, y1, x2, y2) in bboxes:
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
+    bboxes = extract_objects(mask, ioa_thr=ioa_thr)
+    preds = []
+    annotated = frame.copy()
+    for bbox in bboxes:
+        score = score_bbox(mask, bbox)
+        preds.append((bbox, score))
+        x1, y1, x2, y2 = bbox
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 255), 3)
         
-    return mask, frame
+    return mask, annotated, preds
 
-def process_video(video_path, alpha=2.5, output_path="result/", train_ratio=0.25):
+@dataclass
+class VideoRun:
+    preds_by_frame: dict
+    n_train: int
+    n_frames: int
+    train_ratio: float
+
+def process_video(
+        video_path, 
+        model,
+        output_path="result/",
+        train_ratio=0.25,
+        save_videos=True,
+        ioa_thr= 0.8
+    ):
     """
     Main pipeline to load the video, train the model, and evaluate the rest.
     """
@@ -105,15 +133,19 @@ def process_video(video_path, alpha=2.5, output_path="result/", train_ratio=0.25
     n_test = n_frames - n_train
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    fps = cap.get(cv2.CAP_PROP_FPS)
 
     # Prepare output
     os.makedirs(output_path, exist_ok=True)
-    mask_path = os.path.join(output_path, 'mask.mp4')
-    bbox_path = os.path.join(output_path, 'bbox.mp4')
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out_mask = cv2.VideoWriter(mask_path, fourcc, fps, (width, height), isColor=False)
-    out_boxes = cv2.VideoWriter(bbox_path, fourcc, fps, (width, height), isColor=True)
+
+    out_mask=None
+    out_boxes=None
+    if save_videos:
+        mask_path = os.path.join(output_path, 'mask.mp4')
+        bbox_path = os.path.join(output_path, 'bbox.mp4')
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out_mask = cv2.VideoWriter(mask_path, fourcc, fps, (width, height), isColor=False)
+        out_boxes = cv2.VideoWriter(bbox_path, fourcc, fps, (width, height), isColor=True)
 
     # Prepare multithreading
     max_workers = 8
@@ -128,21 +160,32 @@ def process_video(video_path, alpha=2.5, output_path="result/", train_ratio=0.25
             raise ValueError(f"ERROR: Video ended unexpectedly at frame {i+1}/{n_train}!")
         raw_frames.append(frame)
 
-    # Parallel pre-processing
-    print(f"Pre-processing {n_train} frames...")
-    train_frames = np.empty((n_train, height, width, 3), dtype=np.float32)
-    results = list(tqdm(executor.map(pre_process, raw_frames), total=n_train))
-    for i, res in enumerate(results):
-        train_frames[i] = res
+    # Train / Warmup
+    if model.needs_fit:
 
-    # Background (BG) modeling
-    model = SingleGaussianModel(alpha=alpha)
-    print(f"Fitting {model.__class__.__name__}...")
-    model.fit(train_frames)
+        # Parallel pre-processing
+        print(f"Pre-processing {n_train} frames...")
+        train_frames = np.empty((n_train, height, width, 3), dtype=np.float32)
+        results = list(tqdm(executor.map(pre_process, raw_frames), total=n_train))
+        for i, res in enumerate(results):
+            train_frames[i] = res
+
+        # Background (BG) modeling
+        print(f"Fitting {model.__class__.__name__}...")
+        model.fit(train_frames)
+
+    else:
+        print(f"Warming up {model.__class__.__name__} on {n_train} frames...")
+        # Warm-up works sequentially, no benefit from parallelizing
+        for f in tqdm(raw_frames):
+            model.warmup(pre_process(f))
 
     # Foreground (FG) segmentation
+    preds_by_frame = {}
     print(f"Segmenting the remaining 75% ({n_test} frames)...")
     pbar = tqdm(total=n_test)
+
+    frame_idx = n_train
     while True:
         # Read a batch of frames
         raw_frames = []
@@ -157,19 +200,32 @@ def process_video(video_path, alpha=2.5, output_path="result/", train_ratio=0.25
             break
 
         # Process the batch in parallel (and collect results in chronological order)
-        futures = [executor.submit(process_single_test_frame, f, model) for f in raw_frames]
+        futures = [executor.submit(process_single_test_frame, f, model, ioa_thr) for f in raw_frames]
         for future in futures:
-            mask, frame = future.result()
-            out_mask.write(mask)
-            out_boxes.write(frame)
+            mask, frame, preds = future.result()
+
+            preds_by_frame[frame_idx] = preds
+
+            if save_videos:
+                out_mask.write(mask)
+                out_boxes.write(frame)
+
+            frame_idx += 1
             pbar.update(1)
             
     pbar.close()
     executor.shutdown()
     cap.release()
-    out_mask.release()
-    out_boxes.release()
+    if save_videos:
+        out_mask.release()
+        out_boxes.release()
     print(f"Video processing complete. Output videos were saved at {output_path}.")
+    return VideoRun(
+        preds_by_frame=preds_by_frame,
+        n_train=n_train,
+        n_frames=n_frames,
+        train_ratio=train_ratio
+    )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process video for background modeling and foreground object extraction.")
@@ -179,3 +235,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     process_video(video_path=args.video_path, alpha=args.alpha, output_path=args.output_path)
+
+
+
+
+
