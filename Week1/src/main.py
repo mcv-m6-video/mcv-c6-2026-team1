@@ -52,6 +52,7 @@ def parse_args():
     # Common hyperparams
     p.add_argument("--alpha", type=float, default=5.0, help="Used by single_gaussian model.")
     p.add_argument("--learning_rate", type=float, default=-1.0, help="Used by OpenCV models.")
+    p.add_argument("--min_box_area", type=int, default=1500, help="Define minimum bbox area.")
 
     # MOG2-only
     p.add_argument("--history", type=int, default=500)
@@ -93,6 +94,7 @@ def main():
         train_ratio=args.train_ratio,
         save_videos=args.save_videos,
         ioa_thr=args.ioa_thr,
+        min_area=args.min_box_area
     )
 
     os.makedirs(args.eval_dir, exist_ok=True)

@@ -31,7 +31,7 @@ def post_process(mask):
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (1,50)))
     return mask
 
-def extract_objects(mask, ioa_thr=0.8):
+def extract_objects(mask, ioa_thr=0.8, min_area=1500):
     """
     Separates the binary mask into distinct objects using connected components.
     Uses custom NMS based on Itersection over Area (IoA) to merge overlapping bboxes.
@@ -42,7 +42,12 @@ def extract_objects(mask, ioa_thr=0.8):
     # Get boxes ignoring background label (0)
     if len(stats) == 0: return []
     boxes = stats[1:]
-    if len(boxes) == 0: return [] # ignore background
+
+    areas = boxes[:, 4]
+    keep = areas >= min_area
+    boxes = boxes[keep]
+    if len(boxes) == 0: return []
+
     x1, y1 = boxes[:, 0], boxes[:, 1]
     x2, y2 = x1 + boxes[:, 2], y1 + boxes[:, 3]
     areas = boxes[:, 4]
@@ -88,7 +93,7 @@ def score_bbox(mask, bbox):
         return 0.0
     return float(np.count_nonzero(roi) / roi.size)
 
-def process_single_test_frame(frame, model, ioa_thr=0.8):
+def process_single_test_frame(frame, model, ioa_thr=0.8, min_area=1500):
     """
     Wraps the entire testing pipeline for a single frame so it can be parallelized.
     """
@@ -97,7 +102,7 @@ def process_single_test_frame(frame, model, ioa_thr=0.8):
     mask = post_process(mask)
 
     # Object separation
-    bboxes = extract_objects(mask, ioa_thr=ioa_thr)
+    bboxes = extract_objects(mask, ioa_thr=ioa_thr, min_area=min_area)
     preds = []
     annotated = frame.copy()
     for bbox in bboxes:
@@ -121,7 +126,8 @@ def process_video(
         output_path="result/",
         train_ratio=0.25,
         save_videos=True,
-        ioa_thr= 0.8
+        ioa_thr= 0.8,
+        min_area=1500
     ):
     """
     Main pipeline to load the video, train the model, and evaluate the rest.
@@ -200,7 +206,7 @@ def process_video(
             break
 
         # Process the batch in parallel (and collect results in chronological order)
-        futures = [executor.submit(process_single_test_frame, f, model, ioa_thr) for f in raw_frames]
+        futures = [executor.submit(process_single_test_frame, f, model, ioa_thr, min_area) for f in raw_frames]
         for future in futures:
             mask, frame, preds = future.result()
 
