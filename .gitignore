@@ -7,3 +7,4 @@ wandb/
 *.pth
 *.err
 *.out
+*.mp4
