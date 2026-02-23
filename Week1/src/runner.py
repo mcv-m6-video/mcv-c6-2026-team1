@@ -160,17 +160,9 @@ def process_video(
     for i, res in enumerate(results):
         train_frames[i] = res
 
-    # Train / Warmup
-    if model.needs_fit:
-        # Background (BG) modeling
-        print(f"Fitting {model.__class__.__name__}...")
-        model.fit(train_frames)
-
-    else:
-        print(f"Warming up {model.__class__.__name__} on {n_train} frames...")
-        # Warm-up works sequentially, no benefit from parallelizing
-        for f in tqdm(raw_frames):
-            model.warmup(pre_process(f))
+    # Background (BG) modeling
+    print(f"Fitting {model.__class__.__name__}...")
+    model.fit(train_frames)
 
     # Foreground (FG) segmentation
     print(f"Segmenting the remaining 75% ({n_test} frames)...")
