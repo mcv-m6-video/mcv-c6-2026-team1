@@ -5,6 +5,7 @@ import IPython.display as IPy
 import time
 import json
 from collections import defaultdict
+from evaluation import COCO_JSON_PATH
 
 DEFAULT_VIDEO_PATH = "../data/AICity_data/train/S03/c010/vdo.avi"
 
@@ -20,9 +21,9 @@ def load_video(video_path=DEFAULT_VIDEO_PATH):
         raise IOError(f"ERROR: Could not open video at '{video_path}'")
     return cap
 
-def load_gt_json(gt_path):
-    # Load ground truth per each frame
-    with open(gt_path, "r") as f:
+def load_gt_json():
+    # Load ground truth per each frame (different path because of notebook)
+    with open("../" + COCO_JSON_PATH, "r") as f:
         coco = json.load(f)
 
     gts = defaultdict(list)
@@ -30,12 +31,12 @@ def load_gt_json(gt_path):
         gts[ann["image_id"]].append(ann["bbox"])
     return gts
 
-def play_video(video_path=DEFAULT_VIDEO_PATH, gt_path=None, width=640, height=360):
+def play_video(video_path=DEFAULT_VIDEO_PATH, show_gts=True, skip_train=True, width=640, height=360):
     """
     Plays a video inside a Jupyter Notebook cell.
     """
-    if gt_path:
-        gts = load_gt_json(gt_path)
+    if show_gts:
+        gts = load_gt_json()
         
     cap = load_video(video_path)
 
@@ -45,7 +46,8 @@ def play_video(video_path=DEFAULT_VIDEO_PATH, gt_path=None, width=640, height=36
         fps = 30
     frame_duration = 1.0 / fps
 
-    frame_idx = 0
+    # n_train=535
+    frame_idx = 535 if skip_train else 0
     try:
         while cap.isOpened():
             start_time = time.time()
@@ -55,11 +57,11 @@ def play_video(video_path=DEFAULT_VIDEO_PATH, gt_path=None, width=640, height=36
                 print("End of video.")
                 break
 
-            if gt_path:
+            if show_gts:
                 for (x, y, w, h) in gts[frame_idx]:
                     x1, y1 = int(x), int(y)
                     x2, y2 = int(x + w), int(y + h)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 3)
             
             # Resize + encode (faster SSH transfer)
             _, encoded_img = cv2.imencode('.jpg', cv2.resize(frame, (width, height)))
