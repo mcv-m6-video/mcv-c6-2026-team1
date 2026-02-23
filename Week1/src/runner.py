@@ -86,14 +86,7 @@ def extract_objects(mask, ioa_thr=0.8, min_area=1500):
 
     return bounding_boxes
 
-def score_bbox(mask, bbox):
-    x1, y1, x2, y2 = bbox
-    roi = mask[y1:y2, x1:x2]
-    if roi.size == 0:
-        return 0.0
-    return float(np.count_nonzero(roi) / roi.size)
-
-def process_single_test_frame(frame, model, ioa_thr=0.8, min_area=1500):
+def process_single_test_frame(frame, model, ioa_thr=0.8, min_area=1500, draw_bbox=True):
     """
     Wraps the entire testing pipeline for a single frame so it can be parallelized.
     """
@@ -105,9 +98,10 @@ def process_single_test_frame(frame, model, ioa_thr=0.8, min_area=1500):
     bboxes = extract_objects(mask, ioa_thr=ioa_thr, min_area=min_area)
     preds = []
     for bbox in bboxes:
-        score = score_bbox(mask, bbox)
-        preds.append((bbox, score))
-        cv2.rectangle(frame, bbox[:2], bbox[2:], (0, 0, 255), 3) # bbox_xyxy
+        preds.append(bbox)
+
+        if draw_bbox:
+            cv2.rectangle(frame, bbox[:2], bbox[2:], (0, 0, 255), 3) # bbox_xyxy
         
     return mask, frame, preds
 
@@ -131,7 +125,8 @@ def process_video(
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 
     # Prepare output
-    if output_path:
+    save = bool(output_path)
+    if save:
         os.makedirs(output_path, exist_ok=True)
         mask_path = os.path.join(output_path, 'mask.mp4')
         bbox_path = os.path.join(output_path, 'bbox.mp4')
@@ -177,22 +172,22 @@ def process_video(
             raw_frames.append(frame)
 
         # Process the batch in parallel (and collect results in chronological order)
-        futures = [executor.submit(process_single_test_frame, f, model, ioa_thr, min_area) for f in raw_frames]
+        futures = [executor.submit(process_single_test_frame, f, model, ioa_thr, min_area, save) for f in raw_frames]
         for offset, future in enumerate(futures):
             mask, frame, preds = future.result()
 
             preds_by_frame[frame_idx + offset] = preds
 
-            if output_path:
+            if save:
                 out_mask.write(mask)
                 out_boxes.write(frame)
             
     executor.shutdown()
     cap.release()
-    if output_path:
+    if save:
         out_mask.release()
         out_boxes.release()
-    print(f"Video processing complete.{f' Saved to: {output_path}' if output_path else ''}")
+    print(f"Video processing complete.{f' Saved to: {output_path}' if save else ''}")
     return preds_by_frame
 
 if __name__ == "__main__":
