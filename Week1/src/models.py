@@ -10,6 +10,8 @@ class BaseModel:
     - fit(frames): adapts the model to the provided frames
     - predict(frame): returns binary mask uint8 {0,255} of foreground
     """
+    def isIndependent(self):
+        return False
 
     def fit(self, frames: np.ndarray):
         raise NotImplementedError
@@ -27,6 +29,9 @@ class SingleGaussianModel(BaseModel):
         self.mean = None
         self.mean_rgb = None
         self.std = None
+
+    def isIndependent(self):
+        return True
 
     def fit(self, frames):
         """

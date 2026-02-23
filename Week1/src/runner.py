@@ -34,7 +34,7 @@ def post_process(mask):
 def extract_objects(mask, ioa_thr=0.8, min_area=1500):
     """
     Separates the binary mask into distinct objects using connected components.
-    Uses custom NMS based on Itersection over Area (IoA) to merge overlapping bboxes.
+    Uses custom NMS based on Intersection over Area (IoA) to merge overlapping bboxes.
     Filters boxes with area below min_area to reduce the amount of FPs.
     """
     # connectivity=8 looks at all 8 surrounding pixels
@@ -108,7 +108,7 @@ def process_single_test_frame(frame, model, ioa_thr=0.8, min_area=1500, draw_bbo
 def process_video(
     video_path, 
     model,
-    output_path="result/",
+    output_dir="result/",
     train_ratio=0.25,
     ioa_thr= 0.8,
     min_area=1500
@@ -125,11 +125,12 @@ def process_video(
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 
     # Prepare output
-    save = bool(output_path)
+    save = bool(output_dir)
     if save:
-        os.makedirs(output_path, exist_ok=True)
-        mask_path = os.path.join(output_path, 'mask.mp4')
-        bbox_path = os.path.join(output_path, 'bbox.mp4')
+        output_dir = os.path.join(output_dir, "videos")
+        os.makedirs(output_dir, exist_ok=True)
+        mask_path = os.path.join(output_dir, 'mask.mp4')
+        bbox_path = os.path.join(output_dir, 'bbox.mp4')
         fps = cap.get(cv2.CAP_PROP_FPS)
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out_mask = cv2.VideoWriter(mask_path, fourcc, fps, (width, height), isColor=False)
@@ -162,22 +163,36 @@ def process_video(
     # Foreground (FG) segmentation
     print(f"Segmenting the remaining 75% ({n_test} frames)...")
     preds_by_frame = {}
-    for frame_idx in tqdm(range(n_train, n_frames, batch_size)):
-        # Read a batch of frames (store frame_idx)
-        raw_frames = []
-        for _ in range(batch_size):
+    if model.isIndependent():
+        # Multi-threading
+        for frame_idx in tqdm(range(n_train, n_frames, batch_size)):
+            # Read a batch of frames (store frame_idx)
+            raw_frames = []
+            for _ in range(batch_size):
+                ret, frame = cap.read()
+                if not ret:
+                    break # Stop reading when video ends
+                raw_frames.append(frame)
+
+            # Process the batch in parallel (and collect results in chronological order)
+            futures = [executor.submit(process_single_test_frame, f, model, ioa_thr, min_area, save) for f in raw_frames]
+            for offset, future in enumerate(futures):
+                mask, frame, preds = future.result()
+
+                preds_by_frame[frame_idx + offset] = preds
+                if save:
+                    out_mask.write(mask)
+                    out_boxes.write(frame)
+    
+    else:
+        # No multi-threading
+        for frame_idx in tqdm(range(n_train, n_frames)):
             ret, frame = cap.read()
             if not ret:
-                break # Stop reading when video ends
-            raw_frames.append(frame)
-
-        # Process the batch in parallel (and collect results in chronological order)
-        futures = [executor.submit(process_single_test_frame, f, model, ioa_thr, min_area, save) for f in raw_frames]
-        for offset, future in enumerate(futures):
-            mask, frame, preds = future.result()
-
-            preds_by_frame[frame_idx + offset] = preds
-
+                raise ValueError(f"ERROR: Video ended unexpectedly at frame {frame_idx}/{n_frames}!")
+            
+            mask, frame, preds = process_single_test_frame(frame, model, ioa_thr, min_area, save)
+            preds_by_frame[frame_idx] = preds
             if save:
                 out_mask.write(mask)
                 out_boxes.write(frame)
@@ -187,14 +202,14 @@ def process_video(
     if save:
         out_mask.release()
         out_boxes.release()
-    print(f"Video processing complete.{f' Saved to: {output_path}' if save else ''}")
+    print(f"Video processing complete.{f' Saved to: {output_dir}' if save else ''}")
     return preds_by_frame
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process video for background modeling and foreground object extraction.")
     parser.add_argument("-v", "--video_path", type=str, default="data/AICity_data/train/S03/c010/vdo.avi", help="Path to the input video file.")
-    parser.add_argument("-o", "--output_path", type=str, default="result/", help="Directory to save the output videos.")
+    parser.add_argument("-o", "--output_dir", type=str, default="result/", help="Directory to save the output videos.")
     args = parser.parse_args()
 
     # Example processing
-    process_video(video_path=args.video_path, model=SingleGaussianModel(), output_path=args.output_path)
+    process_video(video_path=args.video_path, model=SingleGaussianModel(), output_dir=args.output_dir)
