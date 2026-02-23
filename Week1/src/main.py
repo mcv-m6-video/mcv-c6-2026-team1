@@ -87,7 +87,7 @@ def main():
 
     model = make_model(args)
 
-    run  = process_video(
+    preds_by_frame = process_video(
         video_path=args.input_video,
         model=model,
         output_path=args.output_dir,
@@ -99,11 +99,10 @@ def main():
 
     os.makedirs(args.eval_dir, exist_ok=True)
     results = coco_evaluate_from_preds(
-        preds_by_frame=run.preds_by_frame,
+        preds_by_frame=preds_by_frame,
         gt_coco_json=args.gt_coco_json,
         dataset_name=args.dataset_name,
-        output_dir=args.eval_dir,
-        n_train=run.n_train
+        output_dir=args.eval_dir
     )
 
     ap50 = None

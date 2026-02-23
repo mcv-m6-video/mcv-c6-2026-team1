@@ -95,8 +95,7 @@ def coco_evaluate_from_preds(
     preds_by_frame: dict,
     gt_coco_json: str,
     dataset_name: str,
-    output_dir: str,
-    n_train: int
+    output_dir: str
 ):
     # Re-register dataset if name reused
     if dataset_name in DatasetCatalog.list():
@@ -113,11 +112,10 @@ def coco_evaluate_from_preds(
         image_id = d["image_id"]
         H, W = d["height"], d["width"]
 
-        # Evaluate only on test frames
-        if image_id < n_train:
-            continue
-
-        frame_preds = preds_by_frame.get(image_id, [])
+        try:
+            frame_preds = preds_by_frame[image_id]
+        except:
+            raise ValueError(f"NOT FOUND KEY {image_id} IN PREDS_BY_FRAME")
 
         inst = Instances((H, W))
         if not frame_preds:

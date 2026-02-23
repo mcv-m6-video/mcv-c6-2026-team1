@@ -30,7 +30,7 @@ class SingleGaussianModel(BaseBackgroundModel):
     """
     needs_fit = True
 
-    def __init__(self, alpha):
+    def __init__(self, alpha=5.0):
         self.alpha = alpha
         self.mean = None
         self.mean_rgb = None
