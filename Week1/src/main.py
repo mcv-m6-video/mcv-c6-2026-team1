@@ -3,7 +3,7 @@ import argparse
 
 from models import SingleGaussianModel, Mog2, Lsbp
 from runner import process_video
-from evaluation import xml_to_coco_gt, coco_evaluate_from_preds
+from evaluation import get_coco_gt, evaluate_from_preds
 
 
 def make_model(args):
@@ -15,12 +15,13 @@ def make_model(args):
             history=args.history,
             varThreshold=args.var_threshold,
             detect_shadows=args.detect_shadows,
+            binThr=args.bin_thresh,
             learning_rate=args.learning_rate,
         )
 
     if args.model == "lsbp":
         return Lsbp(
-            bin_thresh=args.bin_thresh,
+            binThr=args.bin_thresh,
             learning_rate=args.learning_rate,
         )
 
@@ -32,22 +33,11 @@ def parse_args():
 
     # Paths
     p.add_argument("--input_video", type=str, default="./data/AICity_data/train/S03/c010/vdo.avi")
-    p.add_argument("--raw_anns", type=str, default="./data/ai_challenge_s03_c010-full_annotation.xml")
-    p.add_argument("--gt_coco_json", type=str, default="./Week1/src/output/gt_coco.json")
-    p.add_argument("--eval_dir", type=str, default="./Week1/src/output/d2_eval")
-    p.add_argument("--output_dir", type=str, default="./Week1/src/output/videos")
-    p.add_argument("--dataset_name", type=str, default="aicity_s03_c010_gt")
+    p.add_argument("--output_dir", type=str, default="./result")
 
     # Pipeline
-    p.add_argument("--model", type=str, required=True, choices=["sg", "mog2", "lsbp"])
+    p.add_argument("--model", type=str, default="sg", choices=["sg", "mog2", "lsbp"])
     p.add_argument("--train_ratio", type=float, default=0.25)
-    p.add_argument("--ioa_thr", type=float, default=0.8)
-    p.add_argument(
-        "--save_videos", 
-        action=argparse.BooleanOptionalAction, 
-        default=True,
-        help="Save output videos (default: True)"
-        )
 
     # Common hyperparams
     p.add_argument("--alpha", type=float, default=5.0, help="Used by single_gaussian model.")
@@ -81,36 +71,23 @@ def parse_args():
 def main():
     args = parse_args()
 
-    # Ensure GT COCO exists
-    if not os.path.exists(args.gt_coco_json):
-        xml_to_coco_gt(args.raw_anns, args.gt_coco_json, ignore_parked=args.ignore_parked)
-
     model = make_model(args)
+
+    output_dir = args.output_dir if args.output_dir else None
 
     preds_by_frame = process_video(
         video_path=args.input_video,
         model=model,
-        output_path=args.output_dir,
+        output_dir=output_dir,
         train_ratio=args.train_ratio,
-        save_videos=args.save_videos,
-        ioa_thr=args.ioa_thr,
         min_area=args.min_box_area
     )
 
-    os.makedirs(args.eval_dir, exist_ok=True)
-    results = coco_evaluate_from_preds(
-        preds_by_frame=preds_by_frame,
-        gt_coco_json=args.gt_coco_json,
-        dataset_name=args.dataset_name,
-        output_dir=args.eval_dir
-    )
+    # Get COCO GT
+    coco_gt = get_coco_gt(args.train_ratio, ignore_parked=args.ignore_parked)
 
-    ap50 = None
-    if results and "bbox" in results and "AP50" in results["bbox"]:
-        ap50 = float(results["bbox"]["AP50"])
-
-    print("COCO Results:", results)
-    print("AP50:", ap50)
+    # Evaluate
+    evaluate_from_preds(preds_by_frame, coco_gt, output_dir)
 
 
 if __name__ == "__main__":
