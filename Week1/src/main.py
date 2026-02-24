@@ -36,6 +36,7 @@ def parse_args():
     # Paths
     p.add_argument("--input_video", type=str, default="./data/AICity_data/train/S03/c010/vdo.avi")
     p.add_argument("--output_dir", type=str, default="./result")
+    p.add_argument("-s", "--save_video", action="store_true", help="Whether to save the output video with predictions.")
 
     # Pipeline
     p.add_argument("--model", type=str, default="sga", choices=["sg", "sga", "mog2", "lsbp"])
@@ -82,6 +83,7 @@ def main():
         video_path=args.input_video,
         model=model,
         output_dir=output_dir,
+        save_video=args.save_video,
         train_ratio=args.train_ratio,
         min_area=args.min_box_area
     )

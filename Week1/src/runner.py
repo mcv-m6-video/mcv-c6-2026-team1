@@ -81,9 +81,9 @@ def extract_objects(mask, ioa_thr=0.8, min_area=1500):
 
     return bounding_boxes
 
-def process_single_test_frame(frame, model, min_area=1500, draw_bbox=True):
+def process_single_test_frame(frame, model, min_area=1500, draw_bbox=False):
     """
-    Wraps the entire testing pipeline for a single frame so it can be parallelized.
+    Wraps the entire inference pipeline for a single frame.
     """
     clean_frame = pre_process(frame)
     mask = model.predict(clean_frame) # BG/FG classification
@@ -105,6 +105,7 @@ def process_video(
     video_path, 
     model,
     output_dir="result/",
+    save_video=False,
     train_ratio=0.25,
     min_area=1500
 ) -> dict:
@@ -120,8 +121,7 @@ def process_video(
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 
     # Prepare output
-    save = bool(output_dir)
-    if save:
+    if save_video:
         output_dir = os.path.join(output_dir, "videos")
         os.makedirs(output_dir, exist_ok=True)
         mask_path = os.path.join(output_dir, 'mask.mp4')
@@ -159,24 +159,25 @@ def process_video(
         if not ret:
             raise ValueError(f"ERROR: Video ended unexpectedly at frame {frame_idx}/{n_frames}!")
         
-        mask, frame, preds = process_single_test_frame(frame, model, min_area, save)
+        mask, frame, preds = process_single_test_frame(frame, model, min_area, save_video)
         preds_by_frame[frame_idx] = preds
-        if save:
+        if save_video:
             out_mask.write(mask)
             out_boxes.write(frame)
             
     cap.release()
-    if save:
+    if save_video:
         out_mask.release()
         out_boxes.release()
-    print(f"Video processing complete.{f' Saved to: {output_dir}' if save else ''}")
+    print(f"Video processing complete.{f' Saved to: {output_dir}' if save_video else ''}")
     return preds_by_frame
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process video for background modeling and foreground object extraction.")
     parser.add_argument("-v", "--video_path", type=str, default="data/AICity_data/train/S03/c010/vdo.avi", help="Path to the input video file.")
     parser.add_argument("-o", "--output_dir", type=str, default="result/", help="Directory to save the output videos.")
+    parser.add_argument("-s", "--save_video", action="store_true", help="Whether to save the output video with predictions.")
     args = parser.parse_args()
 
     # Example processing
-    process_video(video_path=args.video_path, model=SingleGaussian(), output_dir=args.output_dir)
+    process_video(video_path=args.video_path, model=SingleGaussian(), output_dir=args.output_dir, save_video=args.save_video)
