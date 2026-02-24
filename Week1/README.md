@@ -18,10 +18,22 @@ The main entry point is `Week1/src/main.py`. This script handles foreground extr
 
 ### Basic Execution
 
-To run the code with default parameters:
+To run the code with default parameters (it stores the result of the evaluation in `Week1/result/eval`):
 
 ```bash
 python src/main.py
+```
+
+To store the output videos with the predictions (in `Week1/result/videos`):
+
+```bash
+python src/main.py -s
+```
+
+To also specify a custom folder (relative to `Week1/`) for the result:
+
+```bash
+python src/main.py -s -o "folder_desired"
 ```
 
 ### Command-Line Arguments

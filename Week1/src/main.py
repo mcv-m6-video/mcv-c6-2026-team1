@@ -39,18 +39,28 @@ def make_model(args):
 def parse_args():
     p = argparse.ArgumentParser("Background subtraction + COCO evaluation (Detectron2)")
 
-    # Paths
-    p.add_argument("--input_video", type=str, default="./data/AICity_data/train/S03/c010/vdo.avi")
-    p.add_argument("--output_dir", type=str, default="./result")
+    # I/O arguments
+    p.add_argument("-i", "--input_video", type=str, default="./data/AICity_data/train/S03/c010/vdo.avi")
+    p.add_argument("-o", "--output_dir", type=str, default="./result")
     p.add_argument("-s", "--save_video", action="store_true", help="Whether to save the output video with predictions.")
 
-    # Pipeline
-    p.add_argument("--model", type=str, default="sga", choices=["sg", "sga", "mog2", "lsbp", "rvm", "transcd"])
+    # Data arguments
     p.add_argument("--train_ratio", type=float, default=0.25)
+    p.add_argument(
+        "--ignore_parked", 
+        action=argparse.BooleanOptionalAction, 
+        default=True,
+        help="Ignore parked vehicles (default: True)"
+        )
+    
+    # Model selection
+    p.add_argument("--model", type=str, default="sga", choices=["sg", "sga", "mog2", "lsbp", "rvm", "transcd"])
 
-    # Common hyperparams
+    # Single Gaussian arguments
     p.add_argument("--alpha", type=float, default=5.0, help="Used by SingleGaussian model.")
     p.add_argument("--rho", type=float, default=0.1, help="Used by SingleGaussianAdaptive model.")
+
+    # Other arguments
     p.add_argument("--learning_rate", type=float, default=-1.0, help="Used by OpenCV models.")
     p.add_argument("--min_box_area", type=int, default=1500, help="Define minimum bbox area.")
 
@@ -66,14 +76,6 @@ def parse_args():
 
     # LSBP-only
     p.add_argument("--bin_thresh", type=int, default=155)
-
-    # GT filtering
-    p.add_argument(
-        "--ignore_parked", 
-        action=argparse.BooleanOptionalAction, 
-        default=True,
-        help="Ignore parked vehicles (default: True)"
-        )
 
     return p.parse_args()
 
