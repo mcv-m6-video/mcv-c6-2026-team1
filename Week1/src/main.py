@@ -1,6 +1,6 @@
 import argparse
 
-from models import SingleGaussian, Mog2, Lsbp
+from models import SingleGaussian, SingleGaussianAdaptive, Mog2, Lsbp
 from runner import process_video
 from evaluation import get_coco_gt, evaluate_from_preds
 
@@ -8,6 +8,9 @@ from evaluation import get_coco_gt, evaluate_from_preds
 def make_model(args):
     if args.model == "sg":
         return SingleGaussian(alpha=args.alpha)
+    
+    if args.model == "sga":
+        return SingleGaussianAdaptive(alpha=args.alpha, rho=args.rho)
 
     if args.model == "mog2":
         return Mog2(
@@ -35,11 +38,12 @@ def parse_args():
     p.add_argument("--output_dir", type=str, default="./result")
 
     # Pipeline
-    p.add_argument("--model", type=str, default="sg", choices=["sg", "mog2", "lsbp"])
+    p.add_argument("--model", type=str, default="sga", choices=["sg", "sga", "mog2", "lsbp"])
     p.add_argument("--train_ratio", type=float, default=0.25)
 
     # Common hyperparams
-    p.add_argument("--alpha", type=float, default=5.0, help="Used by single_gaussian model.")
+    p.add_argument("--alpha", type=float, default=5.0, help="Used by SingleGaussian model.")
+    p.add_argument("--rho", type=float, default=0.1, help="Used by SingleGaussianAdaptive model.")
     p.add_argument("--learning_rate", type=float, default=-1.0, help="Used by OpenCV models.")
     p.add_argument("--min_box_area", type=int, default=1500, help="Define minimum bbox area.")
 
