@@ -8,17 +8,12 @@ from video_utils import load_video
 from models import SingleGaussian
 
 
-def pre_process(frame, sigma_s=60, sigma_r=0.4):
+def pre_process(frame, blur_kernel=(5, 5)):
     """
-    Applies an edge-preserving filter to reduce compression artifacts
-    while keeping the sharp edges of the vehicles intact.
+    Applies a Gaussian blur to reduce noise & sharp compression macroblocks,
+    trying to prevent them from triggering the background subtractor.
     """
-    # flags=1 corresponds to cv2.RECURS_FILTER (faster for video processing)
-    # sigma_s controls spatial smoothing size, sigma_r controls color averaging
-    deblocked = cv2.edgePreservingFilter(frame, 1, sigma_s, sigma_r)
-    
-    # Cast to float32 to match the training array and prevent overflow in later math
-    return deblocked.astype(np.float32)
+    return cv2.GaussianBlur(frame, blur_kernel, 0).astype(np.float32)
 
 def post_process(mask):
     """
@@ -86,16 +81,17 @@ def extract_objects(mask, ioa_thr=0.8, min_area=1500):
 
     return bounding_boxes
 
-def process_single_test_frame(frame, model, ioa_thr=0.8, min_area=1500, draw_bbox=True):
+def process_single_test_frame(frame, model, min_area=1500, draw_bbox=True):
     """
     Wraps the entire testing pipeline for a single frame so it can be parallelized.
     """
     clean_frame = pre_process(frame)
     mask = model.predict(clean_frame) # BG/FG classification
     mask = post_process(mask)
+    model.update(mask) # Update the BG model with the refined mask
 
     # Object separation
-    bboxes = extract_objects(mask, ioa_thr=ioa_thr, min_area=min_area)
+    bboxes = extract_objects(mask, min_area=min_area)
     preds = []
     for bbox in bboxes:
         preds.append(bbox)
@@ -110,7 +106,6 @@ def process_video(
     model,
     output_dir="result/",
     train_ratio=0.25,
-    ioa_thr= 0.8,
     min_area=1500
 ) -> dict:
     """
@@ -164,7 +159,7 @@ def process_video(
         if not ret:
             raise ValueError(f"ERROR: Video ended unexpectedly at frame {frame_idx}/{n_frames}!")
         
-        mask, frame, preds = process_single_test_frame(frame, model, ioa_thr, min_area, save)
+        mask, frame, preds = process_single_test_frame(frame, model, min_area, save)
         preds_by_frame[frame_idx] = preds
         if save:
             out_mask.write(mask)
