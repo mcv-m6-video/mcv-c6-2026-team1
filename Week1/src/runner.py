@@ -97,7 +97,9 @@ def process_single_test_frame(frame, model, min_area=1500, draw_bbox=False):
         preds.append(bbox)
 
         if draw_bbox:
-            cv2.rectangle(frame, bbox[:2], bbox[2:], (0, 0, 255), 3) # bbox_xyxy
+            # bbox_xyxy
+            cv2.rectangle(mask, bbox[:2], bbox[2:], 128, 3) 
+            cv2.rectangle(frame, bbox[:2], bbox[2:], (0, 0, 255), 3)
         
     return mask, frame, preds
 

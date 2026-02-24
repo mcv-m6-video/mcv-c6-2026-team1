@@ -8,3 +8,6 @@ torchviz
 nvitop
 ipykernel
 python-dotenv
+ml_collections
+scipy
+gdown
