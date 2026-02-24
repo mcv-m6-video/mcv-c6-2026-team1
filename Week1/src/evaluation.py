@@ -20,6 +20,10 @@ def get_coco_gt(train_ratio: int = 0.25, ignore_parked: bool = True):
     if not os.path.exists(COCO_JSON_PATH): xml_to_coco_gt(train_ratio, ignore_parked)
     return COCO_JSON_PATH
 
+def load_coco_json():
+    with open(get_coco_gt(), "r") as f:
+        return json.load(f)
+
 def xml_to_coco_gt(train_ratio: int, ignore_parked: bool):
     print(f"Parsing XML annotations from {XML_PATH}...")
 

@@ -3,11 +3,10 @@
 import cv2
 import IPython.display as IPy
 import time
-import json
 from collections import defaultdict
-from evaluation import COCO_JSON_PATH
+from evaluation import load_coco_json
 
-DEFAULT_VIDEO_PATH = "../data/AICity_data/train/S03/c010/vdo.avi"
+DEFAULT_VIDEO_PATH = "data/AICity_data/train/S03/c010/vdo.avi"
 
 def load_video(video_path=DEFAULT_VIDEO_PATH):
     """
@@ -19,9 +18,8 @@ def load_video(video_path=DEFAULT_VIDEO_PATH):
     return cap
 
 def load_gt_json():
-    # Load ground truth per each frame (different path because of notebook)
-    with open("../" + COCO_JSON_PATH, "r") as f:
-        coco = json.load(f)
+    # Load ground truth per frame
+    coco = load_coco_json()
 
     gts = defaultdict(list)
     for ann in coco["annotations"]:
