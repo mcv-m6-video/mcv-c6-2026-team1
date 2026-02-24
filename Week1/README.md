@@ -68,8 +68,7 @@ Week1/
 
 # FOR THE SLIDES:
 
-TASK 1:
-
+TASK 1.1:
 - Slide 1: Explain formula and how we do the modeling + mean/variance of the modeling
 - Slide 2: Show with/without preprocessing (a video / frame) + post-processing w/ mathematical morphology
   Show result with opening for removing noise (disconnected regions)
@@ -78,8 +77,6 @@ TASK 1:
 - Slide 3: Show shadow removal + NMS of BBoxes
   Min + max coordinates of connected components for the bounding box (of the FG mask)
 
-- TODO: Improve noise reduction, try to increase the opening filter!
-
 TASK 1.2:
 - Slide 1: Explain how annotation is used (show outside/occlusion GTs) + parked cars (explain why) + all to 1 class (OBJECT)
 - Slide 2: Best alpha based on mAP (quantitative results + plot?) -> explain a bit which alphas were tried AND WHICH IS THE BEST!
@@ -87,7 +84,7 @@ TASK 1.2:
 
 TASK 2.1:
 - Slide 1: Explain formula and how we do the modeling + mean/variance of the modeling (now mean + variance video) + hyperparams procedure
-- Slide 2: Quantitative results (best alpha based on mAP) -> explain which parameters tried (if needed) AND WHICH IS THE BEST!
+- Slide 2: Quantitative results (best alpha + rho based on mAP) -> explain which parameters tried (if needed) AND WHICH IS THE BEST!
 - Slide 3: Shadow adaptation: we not only adapt to grayscale, but also to the RGB mean so that shadow is adapted? (See comparison)
 
 TASK 2.2:

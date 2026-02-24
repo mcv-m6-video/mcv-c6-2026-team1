@@ -7,26 +7,21 @@ from concurrent.futures import ProcessPoolExecutor
 from video_utils import load_video
 from models import SingleGaussian
 
-
-def pre_process(frame, blur_kernel=(5, 5)):
-    """
-    Applies a Gaussian blur to reduce noise & sharp compression macroblocks,
-    trying to prevent them from triggering the background subtractor.
-    """
-    return cv2.GaussianBlur(frame, blur_kernel, 0).astype(np.float32)
-
 def post_process(mask):
     """
     Processes a binary mask after pixel-based classification.
     Reduce noise and try to recover connected components.
     """
-    # Filter small noise & fill holes inside objects
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (10,10)))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (50,1)))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (1,50)))
+    # Filter noise & fill holes inside objects
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))) 
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (1,10)))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (10,5)))  
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (1,20))) 
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (5,5)))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (1,20)))
     return mask
 
-def extract_objects(mask, ioa_thr=0.8, min_area=1500):
+def extract_objects(mask, ioa_thr=0.8):
     """
     Separates the binary mask into distinct objects using connected components.
     Uses custom NMS based on Intersection over Area (IoA) to merge overlapping bboxes.
@@ -36,12 +31,8 @@ def extract_objects(mask, ioa_thr=0.8, min_area=1500):
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask)
 
     # Get boxes ignoring background label (0)
-    if len(stats) == 0: return []
+    if len(stats) < 2: return []
     boxes = stats[1:]
-
-    # Filter low-area boxes
-    boxes = boxes[boxes[:, 4] >= min_area]
-    if len(boxes) == 0: return []
 
     x1, y1 = boxes[:, 0], boxes[:, 1]
     x2, y2 = x1 + boxes[:, 2], y1 + boxes[:, 3]
@@ -81,17 +72,16 @@ def extract_objects(mask, ioa_thr=0.8, min_area=1500):
 
     return bounding_boxes
 
-def process_single_test_frame(frame, model, min_area=1500, draw_bbox=False):
+def process_single_test_frame(frame, model, draw_bbox=False):
     """
     Wraps the entire inference pipeline for a single frame.
     """
-    clean_frame = pre_process(frame)
-    mask = model.predict(clean_frame) # BG/FG classification
-    mask = post_process(mask)
+    mask = model.predict(frame.astype(np.float32)) # BG/FG classification
+    mask = post_process(mask) # Mask refinement w/ mathematical morphology
     model.update(mask) # Update the BG model with the refined mask
 
     # Object separation
-    bboxes = extract_objects(mask, min_area=min_area)
+    bboxes = extract_objects(mask)
     preds = []
     for bbox in bboxes:
         preds.append(bbox)
@@ -108,8 +98,7 @@ def process_video(
     model,
     output_dir="result/",
     save_video=False,
-    train_ratio=0.25,
-    min_area=1500
+    train_ratio=0.25
 ) -> dict:
     """
     Main pipeline to load the video, train the model, and evaluate the rest.
@@ -135,19 +124,12 @@ def process_video(
 
     # Read train frames
     print(f"Reading the first {train_ratio*100}% ({n_train} frames)...")
-    raw_frames = []
+    train_frames = np.empty((n_train, height, width, 3), dtype=np.float32)
     for i in tqdm(range(n_train)):
         ret, frame = cap.read()
         if not ret:
             raise ValueError(f"ERROR: Video ended unexpectedly at frame {i+1}/{n_train}!")
-        raw_frames.append(frame)
-
-    # Parallel pre-processing
-    print(f"Pre-processing {n_train} frames...")
-    train_frames = np.empty((n_train, height, width, 3), dtype=np.float32)
-    with ProcessPoolExecutor(max_workers=8) as executor:
-        for i, res in enumerate(tqdm(executor.map(pre_process, raw_frames), total=n_train)):
-            train_frames[i] = res
+        train_frames[i] = frame
 
     # Background (BG) modeling
     print(f"Fitting {model.__class__.__name__}...")
@@ -161,7 +143,7 @@ def process_video(
         if not ret:
             raise ValueError(f"ERROR: Video ended unexpectedly at frame {frame_idx}/{n_frames}!")
         
-        mask, frame, preds = process_single_test_frame(frame, model, min_area, save_video)
+        mask, frame, preds = process_single_test_frame(frame, model, save_video)
         preds_by_frame[frame_idx] = preds
         if save_video:
             out_mask.write(mask)

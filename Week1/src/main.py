@@ -63,12 +63,11 @@ def parse_args():
     p.add_argument("--model", type=str, default="sga", choices=["sg", "sga", "mog2", "lsbp", "rvm", "transcd"])
 
     # Single Gaussian arguments
-    p.add_argument("--alpha", type=float, default=5.0, help="Used by SingleGaussian model.")
+    p.add_argument("--alpha", type=float, default=1.0, help="Used by SingleGaussian model.")
     p.add_argument("--rho", type=float, default=0.1, help="Used by SingleGaussianAdaptive model.")
 
-    # Other arguments
+    # OpenCV-only
     p.add_argument("--learning_rate", type=float, default=-1.0, help="Used by OpenCV models.")
-    p.add_argument("--min_box_area", type=int, default=1500, help="Define minimum bbox area.")
 
     # MOG2-only
     p.add_argument("--history", type=int, default=500)
@@ -98,8 +97,7 @@ def main():
         model=model,
         output_dir=output_dir,
         save_video=args.save_video,
-        train_ratio=args.train_ratio,
-        min_area=args.min_box_area
+        train_ratio=args.train_ratio
     )
 
     # Get COCO GT
