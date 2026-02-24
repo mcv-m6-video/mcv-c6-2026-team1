@@ -10,9 +10,6 @@ class BaseModel:
     - fit(frames): adapts the model to the provided frames
     - predict(frame): returns binary mask uint8 {0,255} of foreground
     """
-    def isIndependent(self):
-        return False
-
     def fit(self, frames: np.ndarray):
         raise NotImplementedError
 
@@ -20,7 +17,7 @@ class BaseModel:
         raise NotImplementedError
 
 
-class SingleGaussianModel(BaseModel):
+class SingleGaussian(BaseModel):
     """
     Models the background using a Single Gaussian per pixel (RGB mean for shadow rejection).
     """
@@ -29,9 +26,6 @@ class SingleGaussianModel(BaseModel):
         self.mean = None
         self.mean_rgb = None
         self.std = None
-
-    def isIndependent(self):
-        return True
 
     def fit(self, frames):
         """
@@ -118,6 +112,7 @@ class Mog2(OpenCVModel):
 
     def _make_bgsub(self):
         return cv2.createBackgroundSubtractorMOG2(history=self.history, varThreshold=self.varThreshold, detectShadows=self.detect_shadows)
+
 
 class Lsbp(OpenCVModel):
     def __init__(self, binThr: int = 150, learning_rate: float = -1.0):

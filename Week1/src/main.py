@@ -1,14 +1,13 @@
-import os
 import argparse
 
-from models import SingleGaussianModel, Mog2, Lsbp
+from models import SingleGaussian, Mog2, Lsbp
 from runner import process_video
 from evaluation import get_coco_gt, evaluate_from_preds
 
 
 def make_model(args):
     if args.model == "sg":
-        return SingleGaussianModel(alpha=args.alpha)
+        return SingleGaussian(alpha=args.alpha)
 
     if args.model == "mog2":
         return Mog2(

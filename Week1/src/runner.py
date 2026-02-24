@@ -3,9 +3,9 @@ import os
 import argparse
 import numpy as np
 from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 from video_utils import load_video
-from models import SingleGaussianModel
+from models import SingleGaussian
 
 
 def pre_process(frame, sigma_s=60, sigma_r=0.4):
@@ -136,10 +136,6 @@ def process_video(
         out_mask = cv2.VideoWriter(mask_path, fourcc, fps, (width, height), isColor=False)
         out_boxes = cv2.VideoWriter(bbox_path, fourcc, fps, (width, height), isColor=True)
 
-    # Prepare multithreading
-    batch_size = 8
-    executor = ThreadPoolExecutor(max_workers=batch_size)
-
     # Read train frames
     print(f"Reading the first {train_ratio*100}% ({n_train} frames)...")
     raw_frames = []
@@ -152,52 +148,28 @@ def process_video(
     # Parallel pre-processing
     print(f"Pre-processing {n_train} frames...")
     train_frames = np.empty((n_train, height, width, 3), dtype=np.float32)
-    results = list(tqdm(executor.map(pre_process, raw_frames), total=n_train))
-    for i, res in enumerate(results):
-        train_frames[i] = res
+    with ProcessPoolExecutor(max_workers=8) as executor:
+        for i, res in enumerate(tqdm(executor.map(pre_process, raw_frames), total=n_train)):
+            train_frames[i] = res
 
     # Background (BG) modeling
     print(f"Fitting {model.__class__.__name__}...")
     model.fit(train_frames)
 
-    # Foreground (FG) segmentation
+    # Foreground (FG) segmentation (sequential)
     print(f"Segmenting the remaining 75% ({n_test} frames)...")
     preds_by_frame = {}
-    if model.isIndependent():
-        # Multi-threading
-        for frame_idx in tqdm(range(n_train, n_frames, batch_size)):
-            # Read a batch of frames (store frame_idx)
-            raw_frames = []
-            for _ in range(batch_size):
-                ret, frame = cap.read()
-                if not ret:
-                    break # Stop reading when video ends
-                raw_frames.append(frame)
-
-            # Process the batch in parallel (and collect results in chronological order)
-            futures = [executor.submit(process_single_test_frame, f, model, ioa_thr, min_area, save) for f in raw_frames]
-            for offset, future in enumerate(futures):
-                mask, frame, preds = future.result()
-
-                preds_by_frame[frame_idx + offset] = preds
-                if save:
-                    out_mask.write(mask)
-                    out_boxes.write(frame)
-    
-    else:
-        # No multi-threading
-        for frame_idx in tqdm(range(n_train, n_frames)):
-            ret, frame = cap.read()
-            if not ret:
-                raise ValueError(f"ERROR: Video ended unexpectedly at frame {frame_idx}/{n_frames}!")
+    for frame_idx in tqdm(range(n_train, n_frames)):
+        ret, frame = cap.read()
+        if not ret:
+            raise ValueError(f"ERROR: Video ended unexpectedly at frame {frame_idx}/{n_frames}!")
+        
+        mask, frame, preds = process_single_test_frame(frame, model, ioa_thr, min_area, save)
+        preds_by_frame[frame_idx] = preds
+        if save:
+            out_mask.write(mask)
+            out_boxes.write(frame)
             
-            mask, frame, preds = process_single_test_frame(frame, model, ioa_thr, min_area, save)
-            preds_by_frame[frame_idx] = preds
-            if save:
-                out_mask.write(mask)
-                out_boxes.write(frame)
-            
-    executor.shutdown()
     cap.release()
     if save:
         out_mask.release()
@@ -212,4 +184,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Example processing
-    process_video(video_path=args.video_path, model=SingleGaussianModel(), output_dir=args.output_dir)
+    process_video(video_path=args.video_path, model=SingleGaussian(), output_dir=args.output_dir)
