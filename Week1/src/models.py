@@ -1,6 +1,18 @@
+import sys
 import cv2
 import numpy as np
+import torch
+from pathlib import Path
+import torch.nn.functional as F
 from color_utils import video_rgb2gray, rgb2gray
+
+# Ensure we can use TransCD repo
+ROOT = Path(__file__).resolve().parents[1]
+TRANSCD_DIR = ROOT / "externals" / "TransCD"
+sys.path.insert(0, str(TRANSCD_DIR))
+
+from networks.net import TransCDNet
+from networks import configs as cfg
 
 
 class BaseModel:
@@ -103,7 +115,9 @@ class SingleGaussianAdaptive(SingleGaussian):
     
 
 class OpenCVModel(BaseModel):
-    "Basic structure for the OpenCV Background Subtraction models."
+    """
+    Basic structure for the OpenCV Background Subtraction models.
+    """
     def __init__(self, learning_rate: float = -1.0, binThr: int = 150):
         self.lr = learning_rate
         self.binThr = binThr
@@ -161,3 +175,107 @@ class Lsbp(OpenCVModel):
 
     def _make_bgsub(self):
         return cv2.bgsegm.createBackgroundSubtractorLSBP()
+    
+
+class RVM(BaseModel):
+    """
+    Robust Video Matting (RVM) as foreground extractor.
+    """
+    def __init__(self, backbone="resnet50", threshold=0.5, downsample_ratio=0.85):
+        self.threshold = float(threshold)
+        self.downsample_ratio = downsample_ratio
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        self.model = torch.hub.load("PeterL1n/RobustVideoMatting", backbone).to(self.device).eval()
+        self.rec = [None] * 4 
+
+    def _frame_to_input(self, frame: np.ndarray) -> torch.Tensor:
+        """Convert frame (H,W,3) to torch tensor (1,3,H,W) in [0,1]."""
+        if frame.dtype == np.uint8:
+            x = frame.astype(np.float32) / 255.0
+        else:
+            x = frame.astype(np.float32)
+            # handle both [0,1] and [0,255] float inputs
+            if x.max() > 1.5:
+                x = x / 255.0
+        x = np.clip(x, 0.0, 1.0)
+
+        src = torch.from_numpy(x).to(self.device) # (H,W,3)
+        src = src.permute(2, 0, 1).unsqueeze(0) # (1,3,H,W)
+        return src
+
+    @torch.no_grad()
+    def fit(self, frames: np.ndarray):
+        # reset temporal memory
+        self.rec = [None] * 4
+
+        # warm up states using all training frames
+        for fr in frames:
+            src = self._frame_to_input(fr)
+            _, _, *self.rec = self.model(src, *self.rec, self.downsample_ratio)
+
+    @torch.no_grad()
+    def predict(self, frame: np.ndarray) -> np.ndarray:
+        src = self._frame_to_input(frame)
+
+        fgr, pha, *self.rec = self.model(src, *self.rec, self.downsample_ratio)
+
+        alpha = pha[0, 0]  # (H,W), values in [0,1]
+        mask = (alpha >= self.threshold).to(torch.uint8).cpu().numpy() * 255
+        return mask
+
+
+class TransCDBGS(BaseModel):
+    def __init__(
+            self, 
+            weights="./weights/Res_SViT_E4_D4_16.pth", 
+            net_cfg="Res_SViT_E4_D4_16",
+            threshold=0.5
+        ):
+        self.img_size = 512
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.th = float(threshold)
+        self.weights=weights
+        self.net_cfg=net_cfg
+        self.net = self._build_transcd()
+        self.bg = None  # background reference RGB uint8 (H,W,3)
+
+    def _build_transcd(self):
+        """
+        Builds TransCDNet from the repo and loads pretrained weights.
+        net_cfg must match keys in cfg.CONFIGS (e.g., Res_SViT_E4_D4_16).
+        """
+        ncfg = cfg.CONFIGS[self.net_cfg]
+        net = TransCDNet(ncfg, self.img_size, vis=False).to(self.device).eval()
+
+        model = torch.load(self.weights, map_location="cpu")
+        state = model["model_state_dict"]
+        net.load_state_dict(state, strict=False)
+
+        return net
+
+    def fit(self, frames: np.ndarray):
+        frames_u8 = frames if frames.dtype == np.uint8 else np.clip(frames,0,255).astype(np.uint8)
+        self.bg = np.median(frames_u8.astype(np.float32), axis=0).astype(np.uint8)
+
+    def _to_tensor(self, rgb_u8: np.ndarray) -> torch.Tensor:
+        # (H,W,3) uint8 -> (1,3,img_size,img_size) float in [0,1]
+        x = torch.from_numpy(rgb_u8).to(self.device).float() / 255.0
+        x = x.permute(2,0,1).unsqueeze(0)
+        x = F.interpolate(x, size=(self.img_size, self.img_size), mode="bilinear", align_corners=False)
+        return x
+
+    @torch.no_grad()
+    def predict(self, frame: np.ndarray) -> np.ndarray:
+        frame_u8 = frame if frame.dtype == np.uint8 else np.clip(frame,0,255).astype(np.uint8)
+
+        x1 = self._to_tensor(self.bg)
+        x2 = self._to_tensor(frame_u8)
+
+        prob = self.net(x1, x2)[0,0]  # already sigmoid
+        mask_small = (prob >= self.th).to(torch.uint8).cpu().numpy() * 255
+
+        # resize mask back to original H,W
+        H, W = frame_u8.shape[:2]
+        mask = cv2.resize(mask_small, (W, H), interpolation=cv2.INTER_NEAREST)
+        return mask
