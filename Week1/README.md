@@ -1,11 +1,60 @@
-EXPLAIN DATA:
+# Week 1: Background Substraction and Object Detection
 
-Extract AICity_data.zip
-copy ai_challenge_s03_c010-full_annotation.xml
-For the moment, results_opticalflow_kitti.zip is not used => DIR
+This folder contains the source code and documentation for Week 1. The goal is to implement and evaluate background substraction algorithms for object detection in traffic camera footage.
 
-RUN CODE:
-CODE MUST BE EXECUTED FROM WEEK1 FOLDER!
+## Data Setup
+
+Before running the code, the data directory must be configured:
+
+1. Create `Week1/data/`.
+2. Extract `AICity_data.zip` into it.
+3. Copy the annotation file `ai_challenge_s03_c010-full_annotation.xml` into it.
+
+## Source Code
+
+⚠️ **IMPORTANT:** All scripts must be executed from `Week1/`.
+
+The main entry point is `Week1/src/main.py`. This script handles foreground extraction (with object detection), and COCO metric evaluation ($AP_{0.5}$).
+
+### Basic Execution
+
+To run the code with default parameters:
+
+```bash
+python src/main.py
+```
+
+### Command-Line Arguments
+
+The pipeline can be customized using the following arguments:
+
+- `--model`: Selects the background substraction model. Choices are `sg` (Single Gaussian), `sga` (Single Gaussian Adaptive), `mog2` (Mixture-of-Gaussians), `lsbp` (Local SVD Binary Pattern), `rvm` (Robust Video Matting), and `transcd` (Transformer scene Change Detection).
+- `--alpha`: Controls the minimum deviation for a pixel value to be detected as foreground.
+- `--rho`: Controls the adaptation of the `sga` model.
+
+**NOTE:** Before using the Transformer scene Change Detection model, its weights must be downloaded with `Week1/download_transcd_weights.sh`. 
+
+## Directory Structure
+
+```bash
+Week1/
+├── README.md
+├── data/
+│   ├── AICity_data/
+│   └── ai_challenge_s03_c010-full_annotation.xml
+├── src/
+│   ├── TransCD/                 # Code for the TransCD model
+│   ├── color_utils.py           # Grayscale conversion helpers
+│   ├── evaluation.py            # Evaluation code for Object Detection
+│   ├── main.py                  # Main execution script
+│   ├── models.py                # Background subtraction models
+│   ├── runner.py                # Video processing
+│   ├── video_utils.py           # Video utilities
+│   └── view_video.ipynb         # Notebook for video visualization on server
+└── download_transcd_weights.sh  # Download weights for the TransCD model
+```
+
+# FOR THE SLIDES:
 
 TASK 1:
 
@@ -39,17 +88,3 @@ TASK 3:
 - Slide 2: Mas de lo mismo con rvm (oh...no cars due to training to people. Dir DL models depends on "training") + transcd
 - Slide 3: Comparison w/ our best. "Original" video w/ GTs + "Best ours + mAP" (mask det) + "Best SOTA + mAP" (mask det). DISCUSSION AT THE BOTTOM!
 
-## Week Structure
-
-```bash
-Week1/
-├── README.md
-├── data/
-│   ├── AICity_data/
-│   └── ai_challenge_s03_c010-full_annotation.xml
-├── src/
-│   ├── TransCD/
-│   ├── color_utils.py
-│   ├── ...
-│   └── TODO
-```

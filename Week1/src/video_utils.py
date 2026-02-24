@@ -9,9 +9,6 @@ from evaluation import COCO_JSON_PATH
 
 DEFAULT_VIDEO_PATH = "../data/AICity_data/train/S03/c010/vdo.avi"
 
-def rgb2gray(img):
-    return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
 def load_video(video_path=DEFAULT_VIDEO_PATH):
     """
     Initializes an OpenCV VideoCapture object.

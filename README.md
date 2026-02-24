@@ -37,5 +37,5 @@ mcv-c6-2026-team1/
 ├── WeekX/
 │   ├── data/      # Data for Week X
 │   ├── src/       # Code for Week X
-│   └── README.md  # Documentation for Week X
+└── └── README.md  # Documentation for Week X
 ```
