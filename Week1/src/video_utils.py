@@ -31,7 +31,7 @@ def load_gt_json():
         gts[ann["image_id"]].append(ann["bbox"])
     return gts
 
-def play_video(video_path=DEFAULT_VIDEO_PATH, show_gts=True, skip_train=True, width=640, height=360):
+def play_video(video_path=DEFAULT_VIDEO_PATH, show_gts=True, start_frame=535, width=640, height=360):
     """
     Plays a video inside a Jupyter Notebook cell.
     """
@@ -47,7 +47,7 @@ def play_video(video_path=DEFAULT_VIDEO_PATH, show_gts=True, skip_train=True, wi
     frame_duration = 1.0 / fps
 
     # n_train=535
-    frame_idx = 535 if skip_train else 0
+    frame_idx = start_frame
     try:
         while cap.isOpened():
             start_time = time.time()
