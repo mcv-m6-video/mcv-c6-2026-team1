@@ -3,6 +3,7 @@
 import cv2
 import IPython.display as IPy
 import time
+from tqdm import tqdm
 from collections import defaultdict
 from evaluation import load_coco_json
 
@@ -109,17 +110,13 @@ def extract_video(
     print(f"Extracting frames {start_frame}-{end_frame} from {video_path}...")
 
     # n_train=535
-    frame_idx = (535 if test_video else 0) + start_frame
-    while cap.isOpened():
+    frame_offset = (535 if test_video else 0)
+    for frame_idx in tqdm(range(start_frame, end_frame)):
         ret, frame = cap.read()
-        if not ret:
-            cap.release()
-            out.release()
-            break
 
         # Draw ground truths if requested and available for this frame
         if show_gts:
-            for (x, y, w, h) in gts[frame_idx]:
+            for (x, y, w, h) in gts[frame_offset + frame_idx]:
                 x1, y1 = int(x), int(y)
                 x2, y2 = int(x + w), int(y + h)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 3)
@@ -127,8 +124,8 @@ def extract_video(
         # Write frame to the output file
         out.write(frame)
 
-        frame_idx += 1
-
+    cap.release()
+    out.release()
     print(f"Frames successfully saved to '{output_path}'.")
 
 if __name__ == "__main__":
