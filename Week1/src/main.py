@@ -74,6 +74,13 @@ def parse_args():
         default=True,
         help="Ignore parked vehicles (default: True)"
         )
+    
+    p.add_argument(
+        "--only_bike", 
+        action=argparse.BooleanOptionalAction, 
+        default=False,
+        help="Only use bike label (default: False)"
+        )
 
     return p.parse_args()
 
@@ -95,7 +102,7 @@ def main():
     )
 
     # Get COCO GT
-    coco_gt = get_coco_gt(args.train_ratio, ignore_parked=args.ignore_parked)
+    coco_gt = get_coco_gt(args.train_ratio, ignore_parked=args.ignore_parked, only_bike=args.only_bike)
 
     # Evaluate
     evaluate_from_preds(preds_by_frame, coco_gt, output_dir)

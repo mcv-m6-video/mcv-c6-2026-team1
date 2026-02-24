@@ -16,15 +16,15 @@ COCO_JSON_PATH = "gt_coco.json"
 DATASET_NAME = "AICity_data_s03_c010"
 OBJ_ID = 1 # COCO ID (1-based)
 
-def get_coco_gt(train_ratio: int = 0.25, ignore_parked: bool = True):
-    if not os.path.exists(COCO_JSON_PATH): xml_to_coco_gt(train_ratio, ignore_parked)
+def get_coco_gt(train_ratio: int = 0.25, ignore_parked: bool = True, only_bike: bool = False):
+    if not os.path.exists(COCO_JSON_PATH): xml_to_coco_gt(train_ratio, ignore_parked, only_bike)
     return COCO_JSON_PATH
 
 def load_coco_json():
     with open(get_coco_gt(), "r") as f:
         return json.load(f)
 
-def xml_to_coco_gt(train_ratio: int, ignore_parked: bool):
+def xml_to_coco_gt(train_ratio: int, ignore_parked: bool, only_bike: bool):
     print(f"Parsing XML annotations from {XML_PATH}...")
 
     root = ET.parse(XML_PATH).getroot()
@@ -52,6 +52,10 @@ def xml_to_coco_gt(train_ratio: int, ignore_parked: bool):
     annotations = []
     ann_id = 1
     for track in root.findall("track"):
+        label = track.attrib["label"]
+        if only_bike and label != "bike":
+            continue
+
         for box in track.findall("box"):
             # Skip annotations of train frames
             if int(box.attrib["frame"]) < n_train:
