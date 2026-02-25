@@ -142,8 +142,11 @@ def evaluate_from_preds(preds_by_frame: dict, gt_coco_path: str, output_dir: str
                 boxes = np.array(frame_preds, dtype=np.float32)
                 classes = (OBJ_ID - 1) * np.ones((len(frame_preds)), dtype=np.int64)
 
+                # Area-based score (calculated from xyxy bboxes)
+                scores = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+
                 # Generate random confidence scores for the N-runs AP metric
-                scores = np.random.rand(len(frame_preds)).astype(np.float32)
+                #scores = np.random.rand(len(frame_preds)).astype(np.float32)
 
                 inst.pred_boxes = Boxes(_to_torch(boxes))
                 inst.pred_classes = _to_torch(classes)
