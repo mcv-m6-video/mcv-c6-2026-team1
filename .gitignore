@@ -1,3 +1,10 @@
 __pycache__
 data
 result
+wandb/
+.env
+*.json
+*.pth
+*.err
+*.out
+*.mp4

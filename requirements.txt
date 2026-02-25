@@ -1,5 +1,5 @@
 numpy
-opencv-python
+opencv-contrib-python
 scikit-learn
 pillow
 matplotlib
@@ -7,3 +7,7 @@ tqdm
 torchviz
 nvitop
 ipykernel
+python-dotenv
+ml_collections
+scipy
+gdown
