@@ -1,20 +1,20 @@
-# Week 1: Background Substraction and Object Detection
+# Week 2: Object Detection and Object Tracking
 
-This folder contains the source code and documentation for Week 1. The goal is to implement and evaluate background substraction algorithms for object detection in traffic camera footage.
+This folder contains the source code and documentation for Week 2. The goal is to implement and evaluate object detection and tracking algorithms in traffic camera footage.
 
 ## Data Setup
 
 Before running the code, the data directory must be configured:
 
-1. Create `Week1/data/`.
+1. Create `Week2/data/`.
 2. Extract `AICity_data.zip` into it.
 3. Copy the annotation file `ai_challenge_s03_c010-full_annotation.xml` into it.
 
 ## Source Code
 
-⚠️ **IMPORTANT:** All scripts must be executed from `Week1/`.
+⚠️ **IMPORTANT:** All scripts must be executed from `Week2/`.
 
-The main entry point is `Week1/src/main.py`. This script handles foreground extraction (with object detection), and COCO metric evaluation ($AP_{0.5}$).
+The main entry point is `Week2/src/main.py`. This script handles **TODO: CHANGE FROM HERE** foreground extraction (with object detection), and COCO metric evaluation ($AP_{0.5}$).
 
 ### Basic Execution
 
