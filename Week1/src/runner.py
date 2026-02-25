@@ -25,7 +25,6 @@ def extract_objects(mask, ioa_thr=0.8):
     """
     Separates the binary mask into distinct objects using connected components.
     Uses custom NMS based on Intersection over Area (IoA) to merge overlapping bboxes.
-    Filters boxes with area below min_area to reduce the amount of FPs.
     """
     # connectivity=8 looks at all 8 surrounding pixels
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask)
