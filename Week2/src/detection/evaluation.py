@@ -119,9 +119,9 @@ def evaluate_from_preds(preds_by_frame: dict, preds_dir: Optional[str] = None):
         inst = Instances((d["height"], d["width"]))
         frame_preds = preds_by_frame[d["image_id"]]
 
-        # Expected 1-based Class IDs. Shift to 0-based for Detectron2 evaluation
+        # COCO 1-based Class IDs. Map all predictions to 0 for Detectron2 evaluation
         inst.pred_boxes = Boxes(frame_preds["bboxes_xyxy"])
-        inst.pred_classes = frame_preds["category_ids"] - 1
+        inst.pred_classes = 0 * frame_preds["category_ids"]
         inst.scores = frame_preds["scores"]
 
         outputs.append({"instances": inst})
