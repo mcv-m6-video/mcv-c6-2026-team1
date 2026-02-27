@@ -18,6 +18,9 @@ conda activate c6-team1
 # GCC compilers for Detectron2
 conda install -c conda-forge gcc_linux-64=11 gxx_linux-64=11 -y
 
+# Install FFmpeg
+conda install -c conda-forge ffmpeg -y
+
 ## PyTorch installation
 
 # In the cluster the cuda version is the 12.1, so the you need to install a torch version that fits in this cuda version
