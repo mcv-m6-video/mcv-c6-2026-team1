@@ -11,3 +11,5 @@ python-dotenv
 ml_collections
 scipy
 gdown
+ultralytics
+timm

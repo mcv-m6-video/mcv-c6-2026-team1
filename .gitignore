@@ -8,3 +8,4 @@ wandb/
 *.err
 *.out
 *.mp4
+*.pt
