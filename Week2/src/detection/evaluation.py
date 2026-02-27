@@ -15,7 +15,10 @@ XML_PATH = "data/ai_challenge_s03_c010-full_annotation.xml"
 COCO_JSON_PATH = "src/detection/gt_coco.json"
 DATASET_NAME = "AICity_data_s03_c010"
 CATEGORY = {"id": 3, "name": "car"} # COCO 'car' class (1-based)
-EVAL_DIR = "eval"
+EVAL_FRAMES_PATH = "eval_frames.json"
+
+def get_valid_category():
+    return CATEGORY["id"]
 
 def load_json(json_path: str):
     with open(json_path, "r") as f:
@@ -25,7 +28,7 @@ def load_gts():
     return load_json(_get_coco_gt())
 
 def load_preds(preds_dir: str):
-    return load_json(os.path.join(preds_dir, EVAL_DIR, "coco_instances_results.json"))
+    return load_json(os.path.join(preds_dir, "coco_instances_results.json"))
 
 def _get_coco_gt():
     if not os.path.exists(COCO_JSON_PATH): xml_to_det_gt()
@@ -70,7 +73,7 @@ def xml_to_det_gt():
                     annotations.append({
                         "id": ann_id,
                         "image_id": int(box.attrib["frame"]),
-                        "category_id": CATEGORY["id"],
+                        "category_id": get_valid_category(),
                         "bbox": [xtl, ytl, w, h],
                         "area": w*h,
                         "iscrowd": 0,
@@ -91,39 +94,35 @@ def xml_to_det_gt():
     print(f"Number of annotations: {len(coco_gt['annotations'])}")
 
 def evaluate_from_preds(preds_by_frame: dict, preds_dir: Optional[str] = None):
-    if preds_dir is None:
-        eval_dir = None
-    else:
-        eval_dir = os.path.join(preds_dir, EVAL_DIR)
-        os.makedirs(eval_dir, exist_ok=True)
+    if preds_dir is not None:
+        os.makedirs(preds_dir, exist_ok=True)
+
+        # Save the specific frames evaluated to accurately recover empty frames later
+        evaluated_frames = sorted(list(preds_by_frame.keys()))
+        with open(os.path.join(preds_dir, EVAL_FRAMES_PATH), "w") as f:
+            json.dump(evaluated_frames, f)
 
     # Register dataset
     if DATASET_NAME not in DatasetCatalog:
         register_coco_instances(DATASET_NAME, {}, _get_coco_gt(), image_root=".")
 
-    inputs = DatasetCatalog.get(DATASET_NAME)
+    # Only evaluate for frames present in the prediction
+    inputs = [d for d in DatasetCatalog.get(DATASET_NAME) if d["image_id"] in preds_by_frame]
 
     # Prepare evaluator
-    evaluator = COCOEvaluator(DATASET_NAME, output_dir=eval_dir)
+    evaluator = COCOEvaluator(DATASET_NAME, output_dir=preds_dir)
     evaluator.reset()
 
     # Process detections
     outputs = []
     for d in inputs:
         inst = Instances((d["height"], d["width"]))
-        frame_preds = preds_by_frame.get(d["image_id"], [])
-
-        # Empty prediction
-        if not frame_preds:
-            inst.pred_boxes = Boxes(torch.empty((0, 4), dtype=torch.float32))
-            inst.pred_classes = torch.empty((0,), dtype=torch.int64)
-            inst.scores = torch.empty((0,), dtype=torch.float32)
+        frame_preds = preds_by_frame[d["image_id"]]
 
         # Expected 1-based Class IDs. Shift to 0-based for Detectron2 evaluation
-        else:
-            inst.pred_boxes = Boxes(frame_preds["bboxes_xyxy"])
-            inst.pred_classes = frame_preds["category_ids"] - 1
-            inst.scores = frame_preds["scores"]
+        inst.pred_boxes = Boxes(frame_preds["bboxes_xyxy"])
+        inst.pred_classes = frame_preds["category_ids"] - 1
+        inst.scores = frame_preds["scores"]
 
         outputs.append({"instances": inst})
 
@@ -138,23 +137,40 @@ def reevaluate(preds_dir: str):
     # Load preds
     preds = load_preds(preds_dir)
 
+    # Recover frames for evaluation
+    frames_path = os.path.join(preds_dir, EVAL_FRAMES_PATH)
+    if not os.path.exists(frames_path):
+        raise IOError("File of evaluated frames was not found! Unable to reevaluate the detections.")
+    preds_by_frame = {f_id: {} for f_id in load_json(frames_path)}
+    
     # Predictions for Detectron2 evaluation (bboxes in xyxy format)
-    preds_by_frame = {}
     for p in preds:
-        img_id = p["image_id"]
-        if img_id not in preds_by_frame:
-            preds_by_frame[img_id] = {"bboxes_xyxy": [], "category_ids": [], "scores": []}
-        else:
-            x, y, w, h = p["bbox"]
-            preds_by_frame[img_id]["bboxes_xyxy"].append([x, y, x + w, y + h])
-            preds_by_frame[img_id]["category_ids"].append(p["category_id"])
-            preds_by_frame[img_id]["scores"].append(p["score"])
+        # Populate frame predictions if at least one exists
+        if not preds_by_frame[p["image_id"]]:
+            preds_by_frame[p["image_id"]] = {"bboxes_xyxy": [], "category_ids": [], "scores": []}
+        
+        frame_preds = preds_by_frame[p["image_id"]]
+        x, y, w, h = p["bbox"]
+
+        frame_preds["bboxes_xyxy"].append([x, y, x + w, y + h])
+        frame_preds["category_ids"].append(p["category_id"])
+        frame_preds["scores"].append(p["score"])
 
     # Convert lists to tensors
     for frame_preds in preds_by_frame.values():
-        frame_preds["bboxes_xyxy"] = torch.tensor(frame_preds["bboxes_xyxy"], dtype=torch.float32)
-        frame_preds["category_ids"] = torch.tensor(frame_preds["category_ids"], dtype=torch.int64)
-        frame_preds["scores"] = torch.tensor(frame_preds["scores"], dtype=torch.float32)
+        if frame_preds:
+            bboxes = torch.tensor(frame_preds["bboxes_xyxy"], dtype=torch.float32)
+            classes = torch.tensor(frame_preds["category_ids"], dtype=torch.int64)
+            scores = torch.tensor(frame_preds["scores"], dtype=torch.float32)
+        else:
+            # No predictions for this frame
+            bboxes = torch.empty((0, 4), dtype=torch.float32)
+            classes = torch.empty((0,), dtype=torch.int64)
+            scores = torch.empty((0,), dtype=torch.float32)
+
+        frame_preds["bboxes_xyxy"] = bboxes
+        frame_preds["category_ids"] = classes
+        frame_preds["scores"] = scores
 
     # Evaluate
     evaluate_from_preds(preds_by_frame)
