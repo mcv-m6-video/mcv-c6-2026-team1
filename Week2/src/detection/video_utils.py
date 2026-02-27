@@ -11,7 +11,7 @@ from evaluation import load_gts, load_preds
 
 DEFAULT_VIDEO_PATH = "data/AICity_data/train/S03/c010/vdo.avi"
 
-def load_video(video_path=DEFAULT_VIDEO_PATH):
+def init_video(video_path=DEFAULT_VIDEO_PATH):
     """
     Initializes an OpenCV VideoCapture object.
     """
@@ -19,6 +19,24 @@ def load_video(video_path=DEFAULT_VIDEO_PATH):
     if not cap.isOpened():
         raise IOError(f"ERROR: Could not open video at '{video_path}'")
     return cap
+
+def load_video(video_path):
+    """
+    Returns a list frames of a video.
+    """
+    cap = init_video(video_path)
+    print(f"Reading frames from {video_path}...")
+
+    extracted_frames = []
+    for frame_idx in tqdm(range(int(cap.get(cv2.CAP_PROP_FRAME_COUNT)))):
+        ret, frame = cap.read()
+        if ret:
+            # OpenCV loads images in BGR format. Models expect RGB
+            extracted_frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        else:
+            raise IOError(f"Frame {frame_idx} could not be read.")
+        
+    return extracted_frames
 
 def play_video(video_path=DEFAULT_VIDEO_PATH, width=640, height=360):
     """
@@ -78,8 +96,8 @@ def extract_video(
     video_path=DEFAULT_VIDEO_PATH, 
     output_path="output.mp4",
     preds_dir=None,
-    start_frame=535,
-    end_frame=935
+    start_frame=0,
+    end_frame=-1
 ):
     """
     Extracts a video segment showing GTs, optionally drawing predictions.
@@ -88,7 +106,7 @@ def extract_video(
     if preds_dir:
         preds = load_preds_json(preds_dir)
         
-    cap = load_video(video_path)
+    cap = init_video(video_path)
     n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     size = ( int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) )
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -140,4 +158,4 @@ def video_to_gif(input_video: str, output_gif: str, fps: int = 20, width: int = 
 
 if __name__ == "__main__":
     # Example Usage: Extract the first 400 test frames (start_frame=535) from the original video
-    extract_video()
+    extract_video(start_frame=535, end_frame=935)
