@@ -1,13 +1,12 @@
 # video_utils.py
 
-import os
 import subprocess
 import cv2
 import IPython.display as IPy
 import time
 from tqdm import tqdm
 from collections import defaultdict
-from evaluation import load_gts, load_preds
+from src.detection.evaluation import load_gts, load_preds
 
 DEFAULT_VIDEO_PATH = "data/AICity_data/train/S03/c010/vdo.avi"
 

@@ -1,9 +1,9 @@
 import argparse
 import torch
-from video_utils import load_video
-from faster_rcnn import PyTorchFasterRCNN
-from yolo import UltralyticsYOLOv8
-from evaluation import get_valid_category, evaluate_from_preds
+from src.video_utils import load_video
+from src.detection.faster_rcnn import PyTorchFasterRCNN
+from src.detection.yolo import UltralyticsYOLOv8
+from src.detection.evaluation import get_valid_category, evaluate_from_preds
 import time
 
 def build_model(model: str, weights: str):
