@@ -30,9 +30,9 @@ class UltralyticsYOLOv8:
     ) -> None:
         self.device = device
 
-        # Default model: YOLOv8 small pretrained on COCO
+        # Default model: YOLOv10b pretrained on COCO
         if weights is None:
-            weights = "src/detection/weights/yolov8l.pt"
+            weights = "src/detection/weights/yolov10b.pt"
         
         self.model: YOLO = YOLO(weights)
 
