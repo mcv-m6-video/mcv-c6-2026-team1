@@ -5,23 +5,7 @@ import numpy as np
 from filterpy.kalman import KalmanFilter
 from scipy.optimize import linear_sum_assignment
 
-
-def iou(bb_test, bb_gt):
-    """
-    Computes IOU between two bboxes in the form [x1,y1,x2,y2]
-    """
-    xx1 = np.maximum(bb_test[0], bb_gt[0])
-    yy1 = np.maximum(bb_test[1], bb_gt[1])
-    xx2 = np.minimum(bb_test[2], bb_gt[2])
-    yy2 = np.minimum(bb_test[3], bb_gt[3])
-    w = np.maximum(0.0, xx2 - xx1)
-    h = np.maximum(0.0, yy2 - yy1)
-    wh = w * h
-    denom = ((bb_test[2] - bb_test[0]) * (bb_test[3] - bb_test[1])
-             + (bb_gt[2] - bb_gt[0]) * (bb_gt[3] - bb_gt[1]) - wh)
-    if denom <= 0:
-        return 0.0
-    return wh / denom
+from src.tracking.tracking_utils import compute_iou_xyxy
 
 
 def convert_bbox_to_z(bbox):
@@ -168,7 +152,7 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3, ma
 
         for t, trk in enumerate(trackers):
             trk_xyxy = trk[:4]
-            iou_matrix[d, t] = iou(det_xyxy, trk_xyxy)
+            iou_matrix[d, t] = compute_iou_xyxy(det_xyxy, trk_xyxy)
 
     # --- matching choice ---
     if matching == "hungarian":
