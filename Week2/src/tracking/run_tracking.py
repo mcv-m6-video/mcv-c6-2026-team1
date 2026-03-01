@@ -1,11 +1,9 @@
+import cv2
 import argparse
 from pathlib import Path
 
-import cv2
-
 from src.video_utils import load_video
 from src.detection.runner import build_model, run_detection
-
 from src.tracking.trackers import track_video_overlap, track_video_sort
 
 
@@ -34,7 +32,7 @@ def main(args):
 
     # Track
     if args.tracking_model == "overlap":
-        track_video_overlap(
+        result = track_video_overlap(
             video_frames, 
             preds_by_frame,
             matching=args.matching,
@@ -45,7 +43,7 @@ def main(args):
             save_video=args.save_video
         )
     else:
-        track_video_sort(
+        result = track_video_sort(
             video_frames, 
             preds_by_frame, 
             matching=args.matching,
@@ -55,6 +53,8 @@ def main(args):
             out=out,
             save_video=args.save_video
         )
+
+    return result
 
 
 def parse_args():
@@ -71,7 +71,7 @@ def parse_args():
 
     # Data args
     p.add_argument("-i", "--input_path", type=str, default="./data/AICity_data/train/S03/c010/vdo.avi")
-    p.add_argument("-o", "--output_path", type=str, default="./src/tracking_results/test_video.mp4")
+    p.add_argument("-o", "--output_path", type=str, default="./src/tracking/tracking_results/test_video.mp4")
 
     # Detection filters
     p.add_argument("--min_confidence", type=float, default=0.3)
@@ -82,6 +82,8 @@ def parse_args():
 
     # Video
     p.add_argument("-s", "--save_video", action="store_true", help="Whether to save the output video with tracking.")
+
+    return p.parse_args()
 
 
 if __name__ == "__main__":
