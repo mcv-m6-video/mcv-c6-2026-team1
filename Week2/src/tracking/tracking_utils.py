@@ -1,12 +1,9 @@
-from collections import OrderedDict
-
 import cv2
 import numpy as np
-
+from collections import OrderedDict
 
 
 def rgb_to_bgr(frame_rgb):
-    frame_rgb = np.ascontiguousarray(frame_rgb)
     return cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
 
 
@@ -32,7 +29,7 @@ class Track:
 # Drawing track lines and detections
 def draw_tracks_on_frame(frame, tracks, frame_idx):
     for t in tracks:
-        # ensure this frame is in history (needed for trails)
+        # ensure this frame is in history (needed for drawing trails)
         if frame_idx not in t.history:
             t.history[frame_idx] = t.bbox.copy()
 

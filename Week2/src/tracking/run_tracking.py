@@ -11,7 +11,6 @@ from src.tracking.trackers import track_video_overlap, track_video_sort
 
 def main(args):
     out_path = Path(args.output_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Load video
     video_frames = load_video(args.input_path)
@@ -20,31 +19,41 @@ def main(args):
     det_model = build_model(args.detection_model, args.weights)
     preds_by_frame = run_detection(video_frames, det_model, frame_idxs=None, batch_size=args.batch_size)
 
-    cap = cv2.VideoCapture(args.input_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    cap.release()
+    out = None
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(str(args.output_path), fourcc, fps, (width, height))
+    if args.save_video:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        cap = cv2.VideoCapture(args.input_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = cv2.VideoWriter(str(out_path), fourcc, fps, (width, height))
 
     # Track
     if args.tracking_model == "overlap":
         track_video_overlap(
-            video_frames, preds_by_frame, out,
+            video_frames, 
+            preds_by_frame,
             matching=args.matching,
             min_confidence=args.min_confidence,
             iou_th=args.min_iou,
-            max_age=args.max_age
+            max_age=args.max_age,
+            out=out,
+            save_video=args.save_video
         )
     else:
         track_video_sort(
-            video_frames, preds_by_frame, out,
+            video_frames, 
+            preds_by_frame, 
             matching=args.matching,
             min_confidence=args.min_confidence,
             iou_th=args.min_iou,
-            max_age=args.max_age
+            max_age=args.max_age,
+            out=out,
+            save_video=args.save_video
         )
 
 
@@ -71,7 +80,8 @@ def parse_args():
     p.add_argument("--min_iou", type=float, default=0.4)
     p.add_argument("--max_age", type=int, default=1)
 
-    return p.parse_args()
+    # Video
+    p.add_argument("-s", "--save_video", action="store_true", help="Whether to save the output video with tracking.")
 
 
 if __name__ == "__main__":
