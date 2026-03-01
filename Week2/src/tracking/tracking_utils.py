@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from collections import OrderedDict
+from typing import List, Dict, Any
 
 
 def rgb_to_bgr(frame_rgb):
@@ -24,6 +25,25 @@ class Track:
         self.bbox = np.asarray(bbox, dtype=np.float32)
         self.time_since_update = 0
         self.history[frame_idx] = self.bbox.copy()
+
+
+# Tracking utils for latter evaluation
+class TrackingFrame:
+    def __init__(self, 
+                 frame_idx: int, 
+                 track_ids: np.ndarray, 
+                 boxes_xyxy: np.ndarray, 
+                 classes: np.ndarray):
+        self.frame_idx = frame_idx
+        self.track_ids = track_ids
+        self.boxes_xyxy = boxes_xyxy
+        self.classes = classes 
+
+
+class TrackingResult:
+    def __init__(self, frames: List[TrackingFrame], tracks: Dict[int, Any]):
+        self.frames = frames
+        self.tracks = tracks 
 
 
 # Drawing track lines and detections

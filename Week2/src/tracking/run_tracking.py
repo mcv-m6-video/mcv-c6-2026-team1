@@ -1,10 +1,13 @@
 import cv2
+import json
 import argparse
+from datetime import datetime
 from pathlib import Path
 
 from src.video_utils import load_video
 from src.detection.runner import build_model, run_detection
 from src.tracking.trackers import track_video_overlap, track_video_sort
+from src.tracking.evaluation.main import evaluate_tracking
 
 
 def main(args):
@@ -32,7 +35,7 @@ def main(args):
 
     # Track
     if args.tracking_model == "overlap":
-        result = track_video_overlap(
+        pred = track_video_overlap(
             video_frames, 
             preds_by_frame,
             matching=args.matching,
@@ -43,7 +46,7 @@ def main(args):
             save_video=args.save_video
         )
     else:
-        result = track_video_sort(
+        pred = track_video_sort(
             video_frames, 
             preds_by_frame, 
             matching=args.matching,
@@ -54,7 +57,56 @@ def main(args):
             save_video=args.save_video
         )
 
-    return result
+    metrics = evaluate_tracking(pred)
+    save_metrics_json(metrics, args)
+
+    return metrics
+
+
+def save_metrics_json(metrics, args):
+    """
+    Saves metrics dict nicely formatted to JSON.
+    """
+    out_video_path = Path(args.output_path)
+    metrics_dir = out_video_path.parent / "metrics"
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+
+    # Experiment name
+    exp_name = (
+        f"det={args.detection_model}"
+        f"_trk={args.tracking_model}"
+        f"_match={args.matching}"
+        f"_conf={args.min_confidence:.2f}"
+        f"_iou={args.min_iou:.2f}"
+        f"_age={args.max_age}"
+    )
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    metrics_path = metrics_dir / f"{exp_name}_{ts}.json"
+
+    metadata = {
+        "timestamp": datetime.now().isoformat(),
+        "detection_model": args.detection_model,
+        "weights": args.weights,
+        "batch_size": args.batch_size,
+
+        "tracking_model": args.tracking_model,
+        "matching": args.matching,
+        "min_confidence": float(args.min_confidence),
+        "min_iou": float(args.min_iou),
+        "max_age": int(args.max_age),
+    }
+
+    output = {
+        "metrics": metrics,
+        "metadata": metadata,
+    }
+
+    with open(metrics_path, "w") as f:
+        json.dump(output, f, indent=4)
+
+    print(f"Metrics saved to: {metrics_path}")
+    return metrics_path
 
 
 def parse_args():

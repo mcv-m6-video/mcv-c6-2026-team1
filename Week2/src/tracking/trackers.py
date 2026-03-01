@@ -1,10 +1,14 @@
 import numpy as np
-from dataclasses import dataclass
-from typing import Dict, List, Any
 from scipy.optimize import linear_sum_assignment
 
 from src.tracking.sort import Sort
-from src.tracking.tracking_utils import Track, rgb_to_bgr, draw_tracks_on_frame, compute_iou_xyxy
+from src.tracking.tracking_utils import (
+    Track, 
+    TrackingFrame,
+    TrackingResult,
+    rgb_to_bgr, 
+    draw_tracks_on_frame, 
+    compute_iou_xyxy)
 
 
 # Input is preds_by_frame of run_detection function
@@ -117,22 +121,7 @@ def hungarian_overlap_tracker(predicted_boxes, predicted_classes, active_tracks,
 
     active_tracks = [t for t in active_tracks if t.time_since_update <= max_age]
     return active_tracks, next_track_id
-
-
-# Tracking utils for latter evaluation
-@dataclass
-class TrackingFrame:
-    frame_idx: int
-    track_ids: np.ndarray    
-    boxes_xyxy: np.ndarray    
-    classes: np.ndarray       
-
-
-@dataclass
-class TrackingResult:
-    frames: List[TrackingFrame]
-    tracks: Dict[int, Any]  
-
+ 
 
 # Track with overlap tracker (greedy or hungarian)
 def track_video_overlap(video_frames, preds_by_frame, matching, min_confidence, iou_th, max_age, out=None, save_video=False):
@@ -260,7 +249,7 @@ def track_video_sort(video_frames, preds_by_frame, matching, min_confidence, iou
             frame_boxes = np.zeros((0, 4), dtype=np.float32)
             frame_classes = np.zeros((0,), dtype=np.int64)
         else:
-            frame_track_ids = np.array([t.track_id for t in active_tracks_this_frame], dtype=np.int64)
+            frame_track_ids = np.array([t.id for t in active_tracks_this_frame], dtype=np.int64)
             frame_boxes = np.array([t.bbox for t in active_tracks_this_frame], dtype=np.float32)
             frame_classes = np.array([t.cls for t in active_tracks_this_frame], dtype=np.int64)
 

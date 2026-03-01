@@ -32,19 +32,19 @@ class HOTA(_BaseMetric):
         # Initialise results
         res = {}
         for field in self.float_array_fields + self.integer_array_fields:
-            res[field] = np.zeros((len(self.array_labels)), dtype=np.float)
+            res[field] = np.zeros((len(self.array_labels)), dtype=np.float32)
         for field in self.float_fields:
             res[field] = 0
 
         # Return result quickly if tracker or gt sequence is empty
         if data['num_tracker_dets'] == 0:
-            res['HOTA_FN'] = data['num_gt_dets'] * np.ones((len(self.array_labels)), dtype=np.float)
-            res['LocA'] = np.ones((len(self.array_labels)), dtype=np.float)
+            res['HOTA_FN'] = data['num_gt_dets'] * np.ones((len(self.array_labels)), dtype=np.float32)
+            res['LocA'] = np.ones((len(self.array_labels)), dtype=np.float32)
             res['LocA(0)'] = 1.0
             return res
         if data['num_gt_dets'] == 0:
-            res['HOTA_FP'] = data['num_tracker_dets'] * np.ones((len(self.array_labels)), dtype=np.float)
-            res['LocA'] = np.ones((len(self.array_labels)), dtype=np.float)
+            res['HOTA_FP'] = data['num_tracker_dets'] * np.ones((len(self.array_labels)), dtype=np.float32)
+            res['LocA'] = np.ones((len(self.array_labels)), dtype=np.float32)
             res['LocA(0)'] = 1.0
             return res
 
@@ -282,9 +282,9 @@ class Identity(_BaseMetric):
         match_rows, match_cols = linear_sum_assignment(fn_mat + fp_mat)
 
         # Accumulate basic statistics
-        res['IDFN'] = fn_mat[match_rows, match_cols].sum().astype(np.int)
-        res['IDFP'] = fp_mat[match_rows, match_cols].sum().astype(np.int)
-        res['IDTP'] = (gt_id_count.sum() - res['IDFN']).astype(np.int)
+        res['IDFN'] = fn_mat[match_rows, match_cols].sum().astype(np.int64)
+        res['IDFP'] = fp_mat[match_rows, match_cols].sum().astype(np.int64)
+        res['IDTP'] = (gt_id_count.sum() - res['IDFN']).astype(np.int64)
 
         # Calculate final ID scores
         res = self._compute_final_fields(res)
