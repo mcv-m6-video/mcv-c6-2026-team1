@@ -1,16 +1,21 @@
 import argparse
 import torch
+from typing import Optional
 from src.video_utils import load_video
 from src.detection.faster_rcnn import PyTorchFasterRCNN
-from src.detection.yolo import UltralyticsYOLOv8
-from src.detection.evaluation import get_valid_category, evaluate_from_preds
+from src.detection.yolo import UltralyticsYOLO
+from src.detection.evaluation import get_valid_category_id, evaluate_from_preds
 import time
 
-def build_model(model: str, weights: str):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def load_best_model(device = None):
+    return build_model("yolo", "src/detection/weights/yolo_best.pt", device)
+
+def build_model(model: str, weights: Optional[str] = None, device = None):
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if model == "yolo":
-        return UltralyticsYOLOv8(
+        return UltralyticsYOLO(
             weights=weights,
             device=device,
         )
@@ -57,7 +62,7 @@ def run_detection(video, model, frame_idxs=None, batch_size=32) -> dict:
     print(f"Prediction run in {total_time:.2f} seconds ({fps:.2f} fps)")
 
     # Map model predictions to frame IDs, keeping only valid categories
-    valid_category = get_valid_category()
+    valid_category = get_valid_category_id()
     preds_by_frame = {}
     for f_id, pred in zip(frame_idxs, preds):
         mask = pred["category_ids"] == valid_category

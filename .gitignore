@@ -10,3 +10,6 @@ wandb/
 *.mp4
 *.pt
 *.gif
+dataset/
+runs/
+logs/

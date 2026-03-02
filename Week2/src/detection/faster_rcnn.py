@@ -33,9 +33,10 @@ class PyTorchFasterRCNN(torch.nn.Module):
         if weights is None:
             weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.DEFAULT
 
+        print(f"Loading Faster R-CNN model (weights from {weights})...")
         self.model = fasterrcnn_mobilenet_v3_large_fpn(weights=weights).to(self.device)
 
-    def prepare_finetune(self, num_classes, freeze_strategy=1):
+    def get_trainable_params(self, freeze_strategy=1):
         """
         Prepare the model for fine-tuning by replacing the head and applying freezing strategies.
         
@@ -51,7 +52,7 @@ class PyTorchFasterRCNN(torch.nn.Module):
             
         # 2. Re-initialize the box predictor head (creates new layers with requires_grad=True)
         in_feats = self.model.roi_heads.box_predictor.cls_score.in_features
-        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_feats, num_classes)
+        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_feats, 4).to(self.device)
 
         # 3. Apply Unfreezing Strategy
         if freeze_strategy >= 2:
@@ -69,10 +70,19 @@ class PyTorchFasterRCNN(torch.nn.Module):
             for p in self.model.backbone.parameters():
                 p.requires_grad = True
 
-        self.model.to(self.device)
+        return [p for p in self.model.parameters() if p.requires_grad]
 
     def forward(self, images, targets=None):
         return self.model(images, targets)
+    
+    def train(self):
+        self.model.train()
+
+    def eval(self):
+        self.model.eval()
+
+    def state_dict(self):
+        return self.model.state_dict()
 
     @torch.no_grad()
     def predict(self, images: List) -> List[Dict[str, Any]]:

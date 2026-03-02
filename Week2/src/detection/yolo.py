@@ -8,10 +8,13 @@ with Ultralytics YOLO models
 from __future__ import annotations
 from typing import Optional, Dict, Any, List
 import torch
-from ultralytics import YOLO
+from ultralytics import YOLO, settings
+
+# Disable YOLO's native W&B integration to prevent duplicate projects
+settings.update({"wandb": False})
 
 
-class UltralyticsYOLOv8:
+class UltralyticsYOLO:
     """
     Wrapper around Ultralytics YOLO models
 
@@ -34,7 +37,36 @@ class UltralyticsYOLOv8:
         if weights is None:
             weights = "src/detection/weights/yolov10b.pt"
         
+        print(f"Loading YOLO model (weights from {weights})...")
         self.model: YOLO = YOLO(weights)
+
+    def add_callback(self, name, fnc):
+        self.model.add_callback(name, fnc)
+
+    def train(self, args):
+        # Freeze layers depending on strategy
+        if args.freeze_strategy == 1:
+            freeze = 22 # Freeze Backbone & Neck
+        elif args.freeze_strategy == 2:
+            freeze = 10 # Freeze Backbone
+        elif args.freeze_strategy == 3:
+            freeze = 0 # Full Fine-Tuning
+        else:
+            raise ValueError(f"Unknown freeze strategy {args.freeze_strategy}!")
+
+        self.model.train(
+            data = args.data_dir + "/data.yaml",
+            epochs=args.epochs,
+            batch=args.batch_size,
+            lr0=args.lr,
+            freeze=freeze,
+            project="yolo",
+            name=f"yolo_freeze{args.freeze_strategy}_lr{args.lr}",
+            patience=5,
+            auto_augment=False,
+            verbose=False,
+            optimizer="AdamW"
+        )
 
     def predict(self, images: List) -> List[Dict[str, Any]]:
         """

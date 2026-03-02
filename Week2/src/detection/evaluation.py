@@ -1,5 +1,6 @@
 import os
 import json
+import argparse
 from typing import Optional
 import torch
 import xml.etree.ElementTree as ET
@@ -14,8 +15,11 @@ DATASET_NAME = "AICity_data_s03_c010"
 CATEGORY = {"id": 3, "name": "car"} # COCO 'car' class (1-based)
 EVAL_FRAMES_PATH = "eval_frames.json"
 
-def get_valid_category():
+def get_valid_category_id():
     return CATEGORY["id"]
+
+def get_valid_category():
+    return CATEGORY["name"]
 
 def load_json(json_path: str):
     with open(json_path, "r") as f:
@@ -56,7 +60,7 @@ def xml_to_det_gt():
     ann_id = 1
     for track in root.findall("track"):
         # Only work with valid category
-        if track.attrib["label"] == CATEGORY["name"]:
+        if track.attrib["label"] == get_valid_category():
             for box in track.findall("box"):
                 # Only work with detections inside the image
                 if not bool(int(box.attrib["outside"])):
@@ -70,7 +74,7 @@ def xml_to_det_gt():
                     annotations.append({
                         "id": ann_id,
                         "image_id": int(box.attrib["frame"]),
-                        "category_id": get_valid_category(),
+                        "category_id": get_valid_category_id(),
                         "bbox": [xtl, ytl, w, h],
                         "area": w*h,
                         "iscrowd": 0,
@@ -90,7 +94,26 @@ def xml_to_det_gt():
     print(f"Number of images: {len(coco_gt['images'])}")
     print(f"Number of annotations: {len(coco_gt['annotations'])}")
 
-def evaluate_from_preds(preds_by_frame: dict, preds_dir: Optional[str] = None):
+def _get_test_coco_gt():
+    test_json_path = _get_coco_gt().replace(".json", "_test.json")
+    if not os.path.exists(test_json_path):
+        # Load the full GT
+        full_gt = load_gts()
+        
+        # Filter for val frames (f_id >= 535)
+        test_id_thr = 535
+        test_gt = {
+            "images": [img for img in full_gt["images"] if img["id"] >= test_id_thr],
+            "categories": full_gt["categories"],
+            "annotations": [ann for ann in full_gt["annotations"] if ann["image_id"] >= test_id_thr]
+        }
+        
+        with open(test_json_path, "w") as f:
+            json.dump(test_gt, f)
+            
+    return test_json_path
+
+def evaluate_from_preds(preds_by_frame: dict, test_only: bool = False, preds_dir: Optional[str] = None):
     if preds_dir is not None:
         os.makedirs(preds_dir, exist_ok=True)
 
@@ -100,14 +123,21 @@ def evaluate_from_preds(preds_by_frame: dict, preds_dir: Optional[str] = None):
             json.dump(evaluated_frames, f)
 
     # Register dataset
-    if DATASET_NAME not in DatasetCatalog:
-        register_coco_instances(DATASET_NAME, {}, _get_coco_gt(), image_root=".")
+    if test_only:
+        dataset_name = DATASET_NAME + "_TEST"
+        gt = _get_test_coco_gt()
+    else:
+        dataset_name = DATASET_NAME
+        gt = _get_coco_gt()
+
+    if dataset_name not in DatasetCatalog:
+        register_coco_instances(dataset_name, {}, gt, image_root=".")
 
     # Only evaluate for frames present in the prediction
-    inputs = [d for d in DatasetCatalog.get(DATASET_NAME) if d["image_id"] in preds_by_frame]
+    inputs = [d for d in DatasetCatalog.get(dataset_name) if d["image_id"] in preds_by_frame]
 
     # Prepare evaluator
-    evaluator = COCOEvaluator(DATASET_NAME, output_dir=preds_dir)
+    evaluator = COCOEvaluator(dataset_name, output_dir=preds_dir)
     evaluator.reset()
 
     # Process detections
@@ -128,20 +158,25 @@ def evaluate_from_preds(preds_by_frame: dict, preds_dir: Optional[str] = None):
     metrics = evaluator.evaluate()
 
     print("\nAP50:", metrics["bbox"]["AP50"])
+    return metrics["bbox"]["AP50"]
 
-# Avoid running inference again for evaluation
-def reevaluate(preds_dir: str):
+# Avoid running inference again for evaluation on test set
+def evaluate_test_frames(preds_dir: str):
     # Load preds
     preds = load_preds(preds_dir)
 
-    # Recover frames for evaluation
+    # Recover (test) frames for evaluation
     frames_path = os.path.join(preds_dir, EVAL_FRAMES_PATH)
     if not os.path.exists(frames_path):
         raise IOError("File of evaluated frames was not found! Unable to reevaluate the detections.")
-    preds_by_frame = {f_id: {} for f_id in load_json(frames_path)}
+    preds_by_frame = {f_id: {} for f_id in load_json(frames_path) if f_id >= 535}
     
     # Predictions for Detectron2 evaluation (bboxes in xyxy format)
     for p in preds:
+        # Skip train frames
+        if p["image_id"] not in preds_by_frame.keys():
+            continue
+
         # Populate frame predictions if at least one exists
         if not preds_by_frame[p["image_id"]]:
             preds_by_frame[p["image_id"]] = {"bboxes_xyxy": [], "category_ids": [], "scores": []}
@@ -170,4 +205,10 @@ def reevaluate(preds_dir: str):
         frame_preds["scores"] = scores
 
     # Evaluate
-    evaluate_from_preds(preds_by_frame)
+    evaluate_from_preds(preds_by_frame, test_only=True)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Process video for car detection.")
+    parser.add_argument("-d", "--preds_dir", type=str, default="yolo_best", help="Path to the directory with the predictions.")
+    args = parser.parse_args()
+    evaluate_test_frames(args.preds_dir)

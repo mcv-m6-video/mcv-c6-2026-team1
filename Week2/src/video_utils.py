@@ -19,7 +19,7 @@ def init_video(video_path=DEFAULT_VIDEO_PATH):
         raise IOError(f"ERROR: Could not open video at '{video_path}'")
     return cap
 
-def load_video(video_path):
+def load_video(video_path=DEFAULT_VIDEO_PATH):
     """
     Returns a list frames of a video.
     """

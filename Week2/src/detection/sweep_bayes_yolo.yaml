@@ -1,0 +1,26 @@
+program: src.detection.train_yolo
+entity: "c5-team1"
+project: "c6_bayesian_yolo"
+method: bayes
+metric:
+  name: val_AP50
+  goal: maximize
+parameters:
+  epochs:
+    value: 50
+  batch_size:
+    value: 16
+  data_dir:
+    value: "src/detection/dataset/sequential/fold_1"
+  freeze_strategy:
+    value: 2   # Best YOLO strategy
+  lr:
+    distribution: log_uniform_values
+    min: 0.00001
+    max: 0.001
+command:
+  - ${env}
+  - ${interpreter}
+  - "-m"
+  - ${program}
+  - ${args}
