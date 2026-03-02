@@ -10,6 +10,7 @@ wandb/
 *.mp4
 *.pt
 *.gif
+*.pkl
 dataset/
 runs/
 logs/

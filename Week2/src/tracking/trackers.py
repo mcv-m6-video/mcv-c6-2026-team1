@@ -2,30 +2,28 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from src.tracking.sort import Sort
-from src.detection.evaluation import get_valid_category
-from src.tracking.tracking_utils import Track, rgb_to_bgr, draw_tracks_on_frame, compute_iou_xyxy
-
+from src.tracking.tracking_utils import (
+    Track, 
+    TrackingFrame,
+    TrackingResult,
+    rgb_to_bgr, 
+    draw_tracks_on_frame, 
+    compute_iou_xyxy)
 
 
 # Input is preds_by_frame of run_detection function
-def filter_detections_for_frame(pred, min_confidence):
-    if pred is None:
+def filter_detections_for_frame(preds_by_frame, min_confidence):
+    if preds_by_frame is None:
         return np.zeros((0, 4), dtype=np.float32), np.zeros((0,), dtype=np.float32), np.zeros((0,), dtype=np.int64)
 
-    boxes = pred["bboxes_xyxy"].detach().cpu().numpy().astype(np.float32)
-    scores = pred["scores"].detach().cpu().numpy().astype(np.float32)
-    classes = pred["category_ids"].detach().cpu().numpy().astype(np.int64)
+    boxes = preds_by_frame["bboxes_xyxy"].detach().cpu().numpy().astype(np.float32)
+    scores = preds_by_frame["scores"].detach().cpu().numpy().astype(np.float32)
+    classes = preds_by_frame["category_ids"].detach().cpu().numpy().astype(np.int64)
 
     if len(boxes) == 0:
         return boxes, scores, classes
 
-    keep_scores = scores >= min_confidence
-
-    # class filter
-    allowed_class = get_valid_category()
-    keep_class = classes == allowed_class
-
-    keep = keep_scores & keep_class
+    keep= scores >= min_confidence
     boxes = boxes[keep]
     scores = scores[keep]
     classes = classes[keep]
@@ -123,15 +121,17 @@ def hungarian_overlap_tracker(predicted_boxes, predicted_classes, active_tracks,
 
     active_tracks = [t for t in active_tracks if t.time_since_update <= max_age]
     return active_tracks, next_track_id
-
+ 
 
 # Track with overlap tracker (greedy or hungarian)
-def track_video_overlap(video_frames, preds_by_frame, out, matching, min_confidence, iou_th, max_age):
+def track_video_overlap(video_frames, preds_by_frame, matching, min_confidence, iou_th, max_age, out=None, save_video=False):
     print(f"Running tracking with maximum overlap and {matching} matching.")
     active_tracks = []
+    tracks_by_id = {}
     next_track_id = 0
 
     tracker_fn = max_overlap_tracker if matching == "greedy" else hungarian_overlap_tracker
+    result_frames = []
 
     for frame_idx, frame_rgb in enumerate(video_frames):
         # OpenCV works in BGR
@@ -143,11 +143,37 @@ def track_video_overlap(video_frames, preds_by_frame, out, matching, min_confide
         active_tracks, next_track_id = tracker_fn(
             boxes, classes, active_tracks, next_track_id, frame_idx, iou_th, max_age
         )
-        
-        draw_tracks_on_frame(frame, active_tracks, frame_idx)
-        out.write(frame)
 
-    out.release()
+        # Save so we can evaluate later
+        for t in active_tracks:
+            tracks_by_id[t.id] = t
+
+        if len(active_tracks) == 0:
+            frame_track_ids = np.zeros((0,), dtype=np.int64)
+            frame_boxes = np.zeros((0, 4), dtype=np.float32)
+            frame_classes = np.zeros((0,), dtype=np.int64)
+        else:
+            frame_track_ids = np.array([t.id for t in active_tracks], dtype=np.int64)
+            frame_boxes = np.array([t.bbox for t in active_tracks], dtype=np.float32)
+            frame_classes = np.array([t.cls for t in active_tracks], dtype=np.int64)
+
+        result_frames.append(
+            TrackingFrame(
+                frame_idx=frame_idx,
+                track_ids=frame_track_ids,
+                boxes_xyxy=frame_boxes,
+                classes=frame_classes,
+            )
+        )
+        
+        if save_video:
+            draw_tracks_on_frame(frame, active_tracks, frame_idx)
+            out.write(frame)
+
+    if save_video:
+        out.release()
+
+    return TrackingResult(frames=result_frames, tracks=tracks_by_id)
 
 
 # Track with SORT (kalman)
@@ -164,20 +190,19 @@ def xyxy_to_xywh(dets_xyxy):
     return np.stack([x1, y1, w, h], axis=1).astype(np.float32)
 
 
-def track_video_sort(video_frames, preds_by_frame, out, matching, min_confidence, iou_th, max_age):
+def track_video_sort(video_frames, preds_by_frame, matching, min_confidence, iou_th, max_age, out=None, save_video=True):
     print(f"Running tracking with SORT and {matching} matching.")
     # One SORT instance per class
     sort_by_class = {}
-
-    # For drawing + trails
     tracks_by_id = {}
+    result_frames = []
 
     for frame_idx, frame_rgb in enumerate(video_frames):
         frame = rgb_to_bgr(frame_rgb)
         pred = preds_by_frame.get(frame_idx, None)
         boxes_xyxy, scores, classes = filter_detections_for_frame(pred, min_confidence)
 
-        # If no detections, still need to call update() for all trackers
+        # Update both classes that exist in current frame and existing trackers
         unique_classes_in_frame = set(classes.tolist())
         all_classes_to_step = set(sort_by_class.keys()) | unique_classes_in_frame
 
@@ -200,7 +225,7 @@ def track_video_sort(video_frames, preds_by_frame, out, matching, min_confidence
             else:
                 dets_for_sort = np.concatenate([dets_xywh, cls_scores.reshape(-1, 1)], axis=1).astype(np.float32)
 
-            # SORT returns: [[x1,y1,x2,y2,track_id], ...]
+            # SORT returns: [[x1,y1,x2,y2,track_id], ...]; current estimate
             tracked = mot.update(dets_for_sort)
 
             if tracked is None or len(tracked) == 0:
@@ -219,7 +244,29 @@ def track_video_sort(video_frames, preds_by_frame, out, matching, min_confidence
 
                 active_tracks_this_frame.append(tracks_by_id[tid])
 
-        draw_tracks_on_frame(frame, active_tracks_this_frame, frame_idx)
-        out.write(frame)
+        if len(active_tracks_this_frame) == 0:
+            frame_track_ids = np.zeros((0,), dtype=np.int64)
+            frame_boxes = np.zeros((0, 4), dtype=np.float32)
+            frame_classes = np.zeros((0,), dtype=np.int64)
+        else:
+            frame_track_ids = np.array([t.id for t in active_tracks_this_frame], dtype=np.int64)
+            frame_boxes = np.array([t.bbox for t in active_tracks_this_frame], dtype=np.float32)
+            frame_classes = np.array([t.cls for t in active_tracks_this_frame], dtype=np.int64)
 
-    out.release()
+        result_frames.append(
+            TrackingFrame(
+                frame_idx=frame_idx,
+                track_ids=frame_track_ids,
+                boxes_xyxy=frame_boxes,
+                classes=frame_classes,
+            )
+        )
+
+        if save_video:
+            draw_tracks_on_frame(frame, active_tracks_this_frame, frame_idx)
+            out.write(frame)
+
+    if save_video:
+        out.release()
+
+    return TrackingResult(frames=result_frames, tracks=tracks_by_id)
