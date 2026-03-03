@@ -6,7 +6,7 @@ import json
 import wandb
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms.functional import to_tensor
-from src.detection.runner import build_model
+from src.detection.run_detection import build_model
 from src.detection.evaluation import evaluate_from_preds
 
 class YOLODatasetAdapter(Dataset):

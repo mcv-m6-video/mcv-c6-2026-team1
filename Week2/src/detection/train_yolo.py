@@ -1,6 +1,6 @@
 import argparse
 import wandb
-from src.detection.runner import build_model
+from src.detection.run_detection import build_model
 
 def main(args):
     wandb.init(config=args, name=f"yolo_freeze{args.freeze_strategy}_lr{args.lr}")

@@ -70,13 +70,16 @@ def run_detection(video, model, frame_idxs=None, batch_size=32) -> dict:
 
     return preds_by_frame
 
+def parse_args():
+    p = argparse.ArgumentParser(description="Process video for car detection.")
+    p.add_argument("-v", "--video_path", type=str, default="data/AICity_data/train/S03/c010/vdo.avi", help="Path to the input video file.")
+    p.add_argument("-o", "--output_dir", type=str, default="result", help="Directory in which to store detection results.")
+    p.add_argument("--model", type=str.lower, default="yolo", choices=["faster_rcnn", "yolo"], help="The model architecture to use")
+    p.add_argument("--weights", type=str, default=None, help="Path to weights (default: pre-trained weights of COCO)")
+    return p.parse_args()
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process video for car detection.")
-    parser.add_argument("-v", "--video_path", type=str, default="data/AICity_data/train/S03/c010/vdo.avi", help="Path to the input video file.")
-    parser.add_argument("-o", "--output_dir", type=str, default="result", help="Directory in which to store detection results.")
-    parser.add_argument("--model", type=str.lower, default="yolo", choices=["faster_rcnn", "yolo"], help="The model architecture to use")
-    parser.add_argument("--weights", type=str, default=None, help="Path to weights (default: pre-trained weights of COCO)")
-    args = parser.parse_args()
+    args = parse_args()
 
     # Build model
     model = build_model(args.model, args.weights)

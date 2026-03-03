@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from src.video_utils import load_video
-from src.detection.runner import build_model, run_detection
+from src.detection.run_detection import build_model, run_detection
 from src.tracking.trackers import track_video_overlap, track_video_sort
 from src.tracking.evaluation.main import evaluate_tracking
 from src.tracking.experiments import EXPERIMENTS

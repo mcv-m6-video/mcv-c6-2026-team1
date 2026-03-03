@@ -2,7 +2,7 @@ import argparse
 import os
 import numpy as np
 import logging
-from src.detection.runner import build_model
+from src.detection.run_detection import build_model
 from src.detection.prepare_datasets import get_dataset_dir
 
 def setup_logger(log_file):
