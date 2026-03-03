@@ -14,54 +14,64 @@ Before running the code, the data directory must be configured:
 
 ⚠️ **IMPORTANT:** All scripts must be executed from `Week2/`.
 
-The main entry point is `Week2/src/main.py`. This script handles **TODO: CHANGE FROM HERE** foreground extraction (with object detection), and COCO metric evaluation ($AP_{0.5}$).
+Our code for this week is split in 2 modules (one for each task): `detection` and `tracking`. Therefore, there is a main entry point for each: `Week2/src/detection/run_detection.py` and `Week2/src/tracking/run_tracking.py`, respectively. The former handles car detection, whereas the latter targets tracking.
 
 ### Basic Execution
 
-To run the code with default parameters (it stores the result of the evaluation in `Week1/result/eval`):
+To run the code (as Python modules) with default parameters:
 
 ```bash
-python src/main.py
-```
-
-To store the output videos with the predictions (in `Week1/result/videos`):
-
-```bash
-python src/main.py -s
-```
-
-To also specify a custom folder (relative to `Week1/`) for the result:
-
-```bash
-python src/main.py -s -o "folder_desired"
+python -m src.detection.run_detection
+python -m src.detection.run_tracking
 ```
 
 ### Command-Line Arguments
 
-The pipeline can be customized using the following arguments:
+Both scripts feature command-line customization. Please refer directly to the `parse_args()` function inside each script. Alternatively, you can run them with the `--help` flag to generate a complete list of all available parameters in your terminal:
 
-- `--model`: Selects the background substraction model. Choices are `sg` (Single Gaussian), `sga` (Single Gaussian Adaptive), `mog2` (Mixture-of-Gaussians), `lsbp` (Local SVD Binary Pattern), `rvm` (Robust Video Matting), and `transcd` (Transformer scene Change Detection).
-- `--alpha`: Controls the minimum deviation for a pixel value to be detected as foreground.
-- `--rho`: Controls the adaptation of the `sga` model.
-
-**NOTE:** Before using the Transformer scene Change Detection model, its weights must be downloaded with `Week1/download_transcd_weights.sh`. 
+```bash
+python -m src.detection.run_detection --help
+python -m src.detection.run_tracking --help
+```
 
 ## Directory Structure
 
 ```bash
-Week1/
+Week2/
 ├── README.md
 ├── data/
 │   ├── AICity_data/
 │   └── ai_challenge_s03_c010-full_annotation.xml
 ├── src/
-│   ├── TransCD/                 # Code for the TransCD model
-│   ├── color_utils.py           # Grayscale conversion helpers
-│   ├── evaluation.py            # Evaluation code for Object Detection
-│   ├── main.py                  # Main execution script
-│   ├── models.py                # Background subtraction models
-│   ├── runner.py                # Video processing
-│   ├── video_utils.py           # Video utilities
-│   └── view_video.ipynb         # Notebook for video visualization on server
-└── download_transcd_weights.sh  # Download weights for the TransCD model
+│   ├── detection/
+│   │   ├── weights/
+│   │   │   └── yolo_best.pt                        # Best trained weights (strategy A)
+│   │   ├── cross_validate.py                       # Runs K-Fold cross-validation
+│   │   ├── evaluation.py                           # Utilities for detection evaluation
+│   │   ├── faster_rcnn.py                          # Faster R-CNN model definition
+│   │   ├── prepare_datasets.py                     # Prepare data according to both Strategy B and C
+│   │   ├── run_bayes_sweep.sh                      # Run Bayesian search for YOLO
+│   │   ├── run_detection.sh                        # Main entry point for detection inference
+│   │   ├── run_sweep.sh                            # Run grid search fine-tuning sweep
+│   │   ├── sweep_bayes_yolo.yaml                   # Configuration file for the Bayesian search for YOLO
+│   │   ├── sweep_faster_rcnn.yaml                  # Configuration file for training Faster R-CNN
+│   │   ├── sweep_yolo.yaml                         # Configuration file for training YOLO
+│   │   ├── train_faster_rcnn.py                    # Run to train Faster R-CNN
+│   │   ├── train_yolo.py                           # Run to train YOLO
+│   │   └── yolo.py                                 # YOLO model definition
+│   ├── tracking/
+│   │   ├── evaluation/
+│   │   │   ├── _base_metric.py                     # Base tracking metric class
+│   │   │   ├── _timing_.py                         # Tracks execution time performance
+│   │   │   ├── main.py                             # Evaluates tracking performance metrics
+│   │   │   ├── methods.py                          # Tracking metric calculation algorithms
+│   │   │   └── utils.py                            # Tracking evaluation helper functions
+│   │   ├── experiments.py                          # Runs multi-tracker experiment configurations
+│   │   ├── plotting.py                             # Generates tracking visualization graphs
+│   │   ├── run_tracking.py                         # Main entry point for tracking inference
+│   │   ├── sort.py                                 # SORT tracking algorithm implementation
+│   │   ├── trackers.py                             # Defines custom tracking classes
+│   │   └── tracking_utils.py                       # General object tracking helpers
+│   ├── video_utils.py                              # Video manipulation utilities
+└── └── view_video.ipynb                            # Notebook for video visualization
 ```
