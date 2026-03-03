@@ -8,7 +8,8 @@ from src.tracking.tracking_utils import (
     TrackingResult,
     rgb_to_bgr, 
     draw_tracks_on_frame, 
-    compute_iou_xyxy)
+    compute_iou_xyxy,
+    xyxy_to_xywh)
 
 
 # Input is preds_by_frame of run_detection function
@@ -16,9 +17,9 @@ def filter_detections_for_frame(preds_by_frame, min_confidence):
     if preds_by_frame is None:
         return np.zeros((0, 4), dtype=np.float32), np.zeros((0,), dtype=np.float32), np.zeros((0,), dtype=np.int64)
 
-    boxes = preds_by_frame["bboxes_xyxy"].detach().cpu().numpy().astype(np.float32)
-    scores = preds_by_frame["scores"].detach().cpu().numpy().astype(np.float32)
-    classes = preds_by_frame["category_ids"].detach().cpu().numpy().astype(np.int64)
+    boxes = preds_by_frame["bboxes_xyxy"].numpy().astype(np.float32)
+    scores = preds_by_frame["scores"].numpy().astype(np.float32)
+    classes = preds_by_frame["category_ids"].numpy().astype(np.int64)
 
     if len(boxes) == 0:
         return boxes, scores, classes
@@ -177,19 +178,6 @@ def track_video_overlap(video_frames, preds_by_frame, matching, min_confidence, 
 
 
 # Track with SORT (kalman)
-# Sort expects xywh
-def xyxy_to_xywh(dets_xyxy):
-    if len(dets_xyxy) == 0:
-        return np.zeros((0, 4), dtype=np.float32)
-    x1 = dets_xyxy[:, 0]
-    y1 = dets_xyxy[:, 1]
-    x2 = dets_xyxy[:, 2]
-    y2 = dets_xyxy[:, 3]
-    w = x2 - x1
-    h = y2 - y1
-    return np.stack([x1, y1, w, h], axis=1).astype(np.float32)
-
-
 def track_video_sort(video_frames, preds_by_frame, matching, min_confidence, iou_th, max_age, out=None, save_video=True):
     print(f"Running tracking with SORT and {matching} matching.")
     # One SORT instance per class
@@ -210,7 +198,7 @@ def track_video_sort(video_frames, preds_by_frame, matching, min_confidence, iou
 
         for cls in sorted(all_classes_to_step):
             if cls not in sort_by_class:
-                sort_by_class[cls] = Sort(max_age=max_age, min_hits=1, iou_threshold=iou_th, matching=matching)
+                sort_by_class[cls] = Sort(max_age=max_age, min_hits=3, iou_threshold=iou_th, matching=matching)
 
             mot = sort_by_class[cls]
 

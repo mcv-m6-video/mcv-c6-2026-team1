@@ -11,8 +11,23 @@ from src.tracking.evaluation.methods import HOTA, Identity
 
 
 XML_PATH = "./data/ai_challenge_s03_c010-full_annotation.xml"
-GT_PKL_PATH = "src/tracking/gt.pkl"
 
+
+def gt_pkl_path(test: bool) -> str:
+    return "src/tracking/gt_test.pkl" if test else "src/tracking/gt_full.pkl"
+
+def load_pkl(pkl_path: str):
+    with open(pkl_path, "rb") as f:
+        return pickle.load(f)
+
+def load_gts(test: bool):
+    return load_pkl(_get_gt(test))
+
+def _get_gt(test: bool):
+    path = gt_pkl_path(test)
+    if not os.path.exists(path):
+        parse_xml_gt(XML_PATH, test=test, out_path=path)
+    return path
 
 def _label_to_class(mapping=CATEGORY):
     label = mapping["name"]
@@ -20,22 +35,7 @@ def _label_to_class(mapping=CATEGORY):
     return {label: id}
 
 
-def load_pkl(pkl_path=GT_PKL_PATH):
-    with open(pkl_path, "rb") as f:
-        gt = pickle.load(f)
-    return gt
-    
-
-def load_gts():
-    return load_pkl(_get_gt())
-
-
-def _get_gt():
-    if not os.path.exists(GT_PKL_PATH): parse_xml_gt(XML_PATH)
-    return GT_PKL_PATH
-
-
-def parse_xml_gt(xml_path, skip_outside = True, skip_occluded = True) -> TrackingResult:
+def parse_xml_gt(xml_path, test = True, skip_outside = True, skip_occluded = False, out_path = None) -> TrackingResult:
     """
     Parse XML into a TrackingResult-like object.
     """
@@ -43,6 +43,7 @@ def parse_xml_gt(xml_path, skip_outside = True, skip_occluded = True) -> Trackin
     root = tree.getroot()
 
     label_to_class = _label_to_class()
+    test_id_thr = 535
 
     per_frame = defaultdict(list)  # per frame_idx get list of (track_id, box, cls)
     max_frame = -1
@@ -57,6 +58,12 @@ def parse_xml_gt(xml_path, skip_outside = True, skip_occluded = True) -> Trackin
 
         for box in track.findall("box"):
             frame_idx = int(box.attrib["frame"])
+
+            if test:
+                if frame_idx < test_id_thr:
+                    continue
+                frame_idx -= test_id_thr
+
             max_frame = max(max_frame, frame_idx)
             
             outside = box.attrib["outside"]
@@ -94,10 +101,12 @@ def parse_xml_gt(xml_path, skip_outside = True, skip_occluded = True) -> Trackin
             frames.append(TrackingFrame(frame_idx=t, track_ids=tids, boxes_xyxy=boxes, classes=clss))
 
     gt = TrackingResult(frames=frames, tracks={})
-    with open(GT_PKL_PATH, "wb") as f:
+    if out_path is None:
+        out_path = gt_pkl_path(test)
+    with open(out_path, "wb") as f:
         pickle.dump(gt, f)
 
-    print(f"Saved GT to {GT_PKL_PATH}")
+    print(f"Saved GT to {out_path}")
     print(f"Number of frames: {len(gt.frames)}")
 
 
@@ -131,14 +140,16 @@ def iou_matrix_xyxy(a, b) -> np.ndarray:
 
 def build_mot_data_for_metrics(
         pred: TrackingResult, 
-        gt: TrackingResult, 
+        gt: TrackingResult,
+        test = True, 
         class_aware = True):
     """
     Build the data dict expected by HOTA.eval_sequence() and Identity.eval_sequence().
     If class_aware=True, disallows matches across classes.
     """
     # Cover full sequence
-    T = max(len(pred.frames), len(gt.frames))
+    start = 535 if test else 0
+    T = max(len(gt.frames), max(0, len(pred.frames) - start))
 
     # Global unique ids
     gt_ids_all = set()
@@ -146,8 +157,9 @@ def build_mot_data_for_metrics(
     for t in range(T):
         if t < len(gt.frames):
             gt_ids_all.update(gt.frames[t].track_ids.tolist())
-        if t < len(pred.frames):
-            tr_ids_all.update(pred.frames[t].track_ids.tolist())
+        pred_idx = t + start
+        if pred_idx < len(pred.frames):
+            tr_ids_all.update(pred.frames[pred_idx].track_ids.tolist())
 
     gt_ids_sorted = sorted(gt_ids_all)
     tr_ids_sorted = sorted(tr_ids_all)
@@ -172,8 +184,9 @@ def build_mot_data_for_metrics(
             boxes_xyxy=np.zeros((0, 4), dtype=np.float32),
             classes=np.zeros((0,), dtype=np.int64),
         )
-        pred_frame = pred.frames[t] if t < len(pred.frames) else TrackingFrame(
-            frame_idx=t,
+        pred_idx = t + start
+        pred_frame = pred.frames[pred_idx] if pred_idx < len(pred.frames) else TrackingFrame(
+            frame_idx=pred_idx,
             track_ids=np.zeros((0,), dtype=np.int64),
             boxes_xyxy=np.zeros((0, 4), dtype=np.float32),
             classes=np.zeros((0,), dtype=np.int64),
@@ -202,32 +215,45 @@ def build_mot_data_for_metrics(
 
 def evaluate_tracking(
     pred: TrackingResult,
-    class_aware: bool = True):
+    class_aware: bool = True,
+    test = True):
     """
     Returns scalar IDF1 and HOTA.
     Convention:
       - IDF1: Identity metric's IDF1
       - HOTA: mean over alpha thresholds
     """
-    gt = load_gts()
-    data = build_mot_data_for_metrics(pred, gt, class_aware=class_aware)
+    gt = load_gts(test=test)
+    data = build_mot_data_for_metrics(pred, gt, class_aware=class_aware, test=test)
 
     hota_metric = HOTA()
-    id_metric = Identity()  # default threshold 0.5
+    id_metric = Identity()
 
     hota_res = hota_metric.eval_sequence(data)
     id_res = id_metric.eval_sequence(data)
 
-    # Scalar HOTA: typical is mean over thresholds
-    hota_scalar = float(np.mean(hota_res["HOTA"])) if "HOTA" in hota_res else float("nan")
-    idf1_scalar = float(id_res["IDF1"])
-
-    return {
-        "HOTA": hota_scalar,
-        "IDF1": idf1_scalar,
-        "DetA_mean": float(np.mean(hota_res["DetA"])) if "DetA" in hota_res else float("nan"),
-        "AssA_mean": float(np.mean(hota_res["AssA"])) if "AssA" in hota_res else float("nan"),
+    summary = {
+        "HOTA": float(np.mean(hota_res["HOTA"])),
+        "IDF1": float(id_res["IDF1"]),
+        "DetA_mean": float(np.mean(hota_res["DetA"])),
+        "AssA_mean": float(np.mean(hota_res["AssA"])),
+        "LocA_mean": float(np.mean(hota_res["LocA"])),
+        "HOTA_0": float(hota_res.get("HOTA(0)", np.nan)),
+        "LocA_0": float(hota_res.get("LocA(0)", np.nan)),
+        "HOTALocA_0": float(hota_res.get("HOTALocA(0)", np.nan)),
+        "IDP": float(id_res.get("IDP", np.nan)),
+        "IDR": float(id_res.get("IDR", np.nan)),
         "IDTP": float(id_res.get("IDTP", 0)),
         "IDFP": float(id_res.get("IDFP", 0)),
         "IDFN": float(id_res.get("IDFN", 0)),
     }
+
+    raw = {
+        "alpha": hota_metric.array_labels.astype(float),          
+        "HOTA": hota_res["HOTA"].astype(float),                    
+        "DetA": hota_res["DetA"].astype(float),                    
+        "AssA": hota_res["AssA"].astype(float),                    
+        "LocA": hota_res["LocA"].astype(float),                    
+    }
+
+    return {"summary": summary, "raw": raw}

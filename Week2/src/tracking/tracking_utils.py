@@ -103,3 +103,16 @@ def compute_iou_xyxy(box0, box1):
 
     union = area0 + area1 - intersection
     return intersection / union
+
+
+# Sort expects xywh
+def xyxy_to_xywh(dets_xyxy):
+    if len(dets_xyxy) == 0:
+        return np.zeros((0, 4), dtype=np.float32)
+    x1 = dets_xyxy[:, 0]
+    y1 = dets_xyxy[:, 1]
+    x2 = dets_xyxy[:, 2]
+    y2 = dets_xyxy[:, 3]
+    w = x2 - x1
+    h = y2 - y1
+    return np.stack([x1, y1, w, h], axis=1).astype(np.float32)

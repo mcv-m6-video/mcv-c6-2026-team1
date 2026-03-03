@@ -11,6 +11,7 @@ wandb/
 *.pt
 *.gif
 *.pkl
+*.png
 dataset/
 runs/
 logs/
