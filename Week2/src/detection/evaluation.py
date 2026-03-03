@@ -113,7 +113,7 @@ def _get_test_coco_gt():
             
     return test_json_path
 
-def evaluate_from_preds(preds_by_frame: dict, test_only: bool = False, preds_dir: Optional[str] = None):
+def evaluate_from_preds(preds_by_frame: dict, test_only: bool = True, preds_dir: Optional[str] = None):
     if preds_dir is not None:
         os.makedirs(preds_dir, exist_ok=True)
 

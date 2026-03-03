@@ -54,8 +54,11 @@ class UltralyticsYOLO:
         else:
             raise ValueError(f"Unknown freeze strategy {args.freeze_strategy}!")
 
+        self.data = args.data_dir + "/data.yaml"
+
         self.model.train(
-            data = args.data_dir + "/data.yaml",
+            data=self.data,
+            device=self.device,
             epochs=args.epochs,
             batch=args.batch_size,
             lr0=args.lr,
@@ -67,6 +70,9 @@ class UltralyticsYOLO:
             verbose=False,
             optimizer="AdamW"
         )
+
+    def evaluate(self):
+        return self.model.val(data=self.data, split="val", device=self.device, verbose=False).box.map50
 
     def predict(self, images: List) -> List[Dict[str, Any]]:
         """

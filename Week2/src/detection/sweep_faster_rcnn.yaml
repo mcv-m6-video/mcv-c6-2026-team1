@@ -16,6 +16,8 @@ parameters:
     values: [1, 2, 3, 4]
   lr:
     values: [0.01, 0.001, 0.0001, 0.00001]
+  device:
+    value: "cuda:1"
 command:
   - ${env}
   - ${interpreter}

@@ -76,7 +76,6 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output_dir", type=str, default="result", help="Directory in which to store detection results.")
     parser.add_argument("--model", type=str.lower, default="yolo", choices=["faster_rcnn", "yolo"], help="The model architecture to use")
     parser.add_argument("--weights", type=str, default=None, help="Path to weights (default: pre-trained weights of COCO)")
-    # TODO: For Task 1.3. parser.add_argument("-cv", "--cross_val_strategy", type=str, default="a", choices=["a", "b", "c"])
     args = parser.parse_args()
 
     # Build model
@@ -86,4 +85,4 @@ if __name__ == "__main__":
     preds_by_frame = run_detection(load_video(args.video_path), model)
     
     # Evaluate
-    evaluate_from_preds(preds_by_frame, args.output_dir)
+    evaluate_from_preds(preds_by_frame, preds_dir=args.output_dir)

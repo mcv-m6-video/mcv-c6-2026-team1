@@ -16,6 +16,8 @@ parameters:
     values: [1, 2, 3]
   lr:
     values: [0.01, 0.001, 0.0001, 0.00001]
+  device:
+    value: "0"
 command:
   - ${env}
   - ${interpreter}

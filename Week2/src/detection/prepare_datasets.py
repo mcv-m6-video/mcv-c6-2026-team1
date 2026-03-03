@@ -8,6 +8,11 @@ from pathlib import Path
 from src.detection.evaluation import get_valid_category_id, get_valid_category, XML_PATH
 from src.video_utils import load_video
 
+DATASET_DIR = "src/detection/dataset"
+
+def get_dataset_dir():
+    return DATASET_DIR
+
 def parse_xml_to_dict():
     """Parses annotations XML and returns a dictionary: {frame_id: [[x1, y1, x2, y2], ...]}"""
     tree = ET.parse(XML_PATH)
@@ -79,7 +84,7 @@ def build_yolo_dataset(video, annotations, output_dir, train_f_idxs, val_f_idxs)
         yaml.dump(yaml_data, f, default_flow_style=False)
     print(f"Dataset ready at {out_dir}/data.yaml")
 
-def build_yolo_datasets(data_dir="src/detection/dataset", K=4, train_ratio=0.25):
+def build_yolo_datasets(data_dir=DATASET_DIR, K=4, train_ratio=0.25):
 
     video = load_video() # List of RGB frames
     annotations = parse_xml_to_dict()
