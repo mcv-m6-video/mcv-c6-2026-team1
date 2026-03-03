@@ -1,0 +1,26 @@
+program: src.detection.train_faster_rcnn
+entity: "c5-team1"
+project: "c6_faster_rcnn"
+method: grid
+metric:
+  name: val_AP50
+  goal: maximize
+parameters:
+  epochs:
+    value: 30
+  batch_size:
+    value: 16
+  data_dir:
+    value: "src/detection/dataset/sequential/fold_1" # Change per fold
+  freeze_strategy:
+    values: [1, 2, 3, 4]
+  lr:
+    values: [0.01, 0.001, 0.0001, 0.00001]
+  device:
+    value: "cuda:1"
+command:
+  - ${env}
+  - ${interpreter}
+  - "-m"
+  - ${program}
+  - ${args}
