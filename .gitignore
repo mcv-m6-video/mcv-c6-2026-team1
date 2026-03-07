@@ -13,6 +13,7 @@ wandb/
 *.pkl
 *.png
 *.jpg
+*.csv
 dataset/
 runs/
 logs/

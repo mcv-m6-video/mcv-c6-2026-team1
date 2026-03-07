@@ -1,17 +1,20 @@
 import json
 import cv2
 import argparse
+import torch
 import numpy as np
 from pathlib import Path
 
 from src.optical_flow.evaluation import load_gt, compute_msen, compute_pepn
-from src.optical_flow.pyflow_method import run_pyflow, get_pyflow_default_params
+from src.optical_flow.pyflow_method import run_pyflow, load_images_pyflow
+from src.optical_flow.gmflow_method import run_gmflow, build_gmflow
 
 IMG_SEQ = 45
-IMG_PATH = Path("./data/training/image_0/")
-GT_PATH = Path("./data/training/flow_noc/")
+IMG_PATH = Path("./data/optical_flow/training/image_0/")
+GT_PATH = Path("./data/optical_flow/training/flow_noc/")
 RESULTS_DIR = Path("./results")
 RESULTS_DIR.mkdir(exist_ok=True)
+
 
 
 def parse_args():
@@ -22,24 +25,10 @@ def parse_args():
     p.add_argument("--save-name", type=str, default=None, help="Optional result file prefix")
     return p.parse_args()
 
-def load_kitti_images(seq, img_path):
+def return_image_paths(seq, img_path):
     img1_path = img_path / f"{seq:06d}_10.png"
     img2_path = img_path / f"{seq:06d}_11.png"
-
-    img1 = cv2.imread(str(img1_path), cv2.IMREAD_UNCHANGED)
-    img2 = cv2.imread(str(img2_path), cv2.IMREAD_UNCHANGED)
-
-    if img1 is None or img2 is None:
-        raise FileNotFoundError(f"Could not read images:\n{img1_path}\n{img2_path}")
-
-    img1 = img1.astype(np.float64) / 255.0
-    img2 = img2.astype(np.float64) / 255.0
-
-    # PyFlow grayscale mode expects shape (H, W, 1)
-    img1 = img1[..., None]
-    img2 = img2[..., None]
-
-    return img1, img2
+    return img1_path, img2_path
 
 def save_flow_visualization(flow, out_path):
     hsv = np.zeros((flow.shape[0], flow.shape[1], 3), dtype=np.uint8)
@@ -53,10 +42,20 @@ def save_flow_visualization(flow, out_path):
     cv2.imwrite(str(out_path), rgb)
 
 def run_sequence(seq=IMG_SEQ, method="pyflow", method_params=None, img_path=IMG_PATH, gt_path=GT_PATH):
-    img1, img2 = load_kitti_images(seq, img_path)
+    img1_path, img2_path = return_image_paths(seq, img_path)
 
     if method == "pyflow":
-        flow, info = run_pyflow(img1, img2, method_params)
+        img1, img2 = load_images_pyflow(img1_path, img2_path)
+        flow, info = run_pyflow(img1, img2, params=method_params)
+    elif method == "gmflow":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = build_gmflow(device=device)
+        flow, info = run_gmflow(
+            model, 
+            img1_path, 
+            img2_path, 
+            inference_params=method_params,
+            device=device)
     else:
         raise ValueError(f"Unknown method: {method}")
 
@@ -70,31 +69,24 @@ def run_sequence(seq=IMG_SEQ, method="pyflow", method_params=None, img_path=IMG_
 if __name__ == "__main__":
     args = parse_args()
 
-    if args.method == "pyflow":
-        params = get_pyflow_default_params()
-    else:
-        raise ValueError(f"Unknown method: {args.method}")
-
     flow, msen, pepn, info = run_sequence(
         seq=args.seq,
-        method=args.method,
-        method_params=params,
+        method=args.method
     )
 
     save_name = args.save_name if args.save_name is not None else f"{args.method}_{args.seq:06d}"
-
-    #np.save(RESULTS_DIR / f"{save_name}_flow.npy", flow)
 
     results = {
         "seq": args.seq,
         "method": args.method,
         "msen": float(msen),
         "pepn": float(pepn),
-        "time": float(info["time"]),
-        "params": params,
+        "time": float(info["time"])
     }
 
-    with open(RESULTS_DIR / args.method / f"{save_name}_metrics.json", "w") as f:
+    method_dir = RESULTS_DIR / args.method
+    method_dir.mkdir(exist_ok=True)
+    with open(method_dir / f"{save_name}_metrics.json", "w") as f:
         json.dump(results, f, indent=2)
 
     print(f"Done. Seq: {args.seq}")
