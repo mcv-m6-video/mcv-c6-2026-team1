@@ -1,13 +1,13 @@
-# Week 2: Object Detection and Object Tracking
+# Week 2: Motion Estimation and Tracking
 
-This folder contains the source code and documentation for Week 2. The goal is to implement and evaluate object detection and tracking algorithms in traffic camera footage.
+This folder contains the source code and documentation for Week 3. The goal is to implement and evaluate optical flow methods and multi-target single camera tracking.
 
 ## Data Setup
 
 Before running the code, the data directory must be configured:
 
-1. Create `Week2/data/`.
-2. Extract `AICity_data.zip` into it.
+1. Create `Week3/data/`.
+2. Extract `...` into it.
 3. Copy the annotation file `ai_challenge_s03_c010-full_annotation.xml` into it.
 
 ## Source Code
@@ -75,3 +75,22 @@ Week2/
 │   ├── video_utils.py                              # Video manipulation utilities
 └── └── view_video.ipynb                            # Notebook for video visualization
 ```
+
+
+
+***Comment for Week3**:
+If cloning submodule use
+```bash
+git clone --recurse-submodules <repo-url>
+```
+If already cloned, to use submodule run:
+```bash
+git submodule update --init --recursive
+```
+
+In order to be able to use pyflow method, we need to compile the files.
+```bash
+cd externals/pyflow
+python setup.py build_ext --inplace
+```
+Then we'll be able to run the code without problems!
