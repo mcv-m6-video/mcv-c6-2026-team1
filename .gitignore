@@ -14,6 +14,7 @@ wandb/
 *.png
 *.jpg
 *.csv
+*.pyc
 dataset/
 runs/
 logs/

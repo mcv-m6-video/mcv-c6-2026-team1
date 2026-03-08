@@ -17,3 +17,5 @@ filterpy
 Cython
 optuna
 pandas
+einops
+timm
