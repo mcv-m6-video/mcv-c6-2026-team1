@@ -78,19 +78,25 @@ Week2/
 
 
 
-***Comment for Week3**:
-If cloning submodule use
+### Comment for Week3:
+## Clone repository
+
+This project uses Git submodules. Clone the repository with:
 ```bash
 git clone --recurse-submodules <repo-url>
 ```
-If already cloned, to use submodule run:
+If you already cloned the repository without submodules, run:
 ```bash
 git submodule update --init --recursive
 ```
 
-In order to be able to use pyflow method, we need to compile the files.
+## Install pretrained models and project assets
+Run the setup script:
 ```bash
-cd externals/pyflow
-python setup.py build_ext --inplace
+bash src/optical_flow/setup.sh
 ```
-Then we'll be able to run the code without problems!
+This script:
+1) initializes submodules
+2) downloads the pretrained models
+3) extracts them into external/pretrained
+4) Compiles PyFlow files directly
