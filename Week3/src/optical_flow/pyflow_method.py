@@ -24,26 +24,42 @@ def get_pyflow_default_params():
         "colType": 1,   # grayscale
     }
 
-def load_images_pyflow(img1_path, img2_path):
-    img1 = cv2.imread(str(img1_path), cv2.IMREAD_UNCHANGED)
-    img2 = cv2.imread(str(img2_path), cv2.IMREAD_UNCHANGED)
+def load_images_pyflow(file):
+    if isinstance(file, (str, Path)):
+        img = cv2.imread(str(file), cv2.IMREAD_UNCHANGED)
 
-    if img1 is None or img2 is None:
-        raise FileNotFoundError(f"Could not read images:\n{img1_path}\n{img2_path}")
+        if img is None:
+            raise FileNotFoundError(f"Could not read images:\n{file}.")
+        
+        if img.ndim == 3 and img.shape[2] >= 3:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    img1 = img1.astype(np.float64) / 255.0
-    img2 = img2.astype(np.float64) / 255.0
+    elif isinstance(file, np.ndarray):
+        img = file
 
-    # PyFlow grayscale mode expects shape (H, W, 1)
-    img1 = img1[..., None]
-    img2 = img2[..., None]
+    else:
+        raise TypeError(f"Unsupported input type: {type(file)}")
 
-    return img1, img2
+    img = img.astype(np.float64) / 255.0
 
-def run_pyflow(img1, img2, params=None):
+    # PyFlow grayscale mode expects (H, W, 1)
+    if img.ndim == 3:
+        # convert RGB image to grayscale
+        img = img.mean(axis=2, keepdims=True)
+    elif img.ndim == 2:
+        img = img[..., None]
+    else:
+        raise ValueError(f"Unsupported image shape: {img.shape}")
+
+    return img
+
+def run_pyflow(image1, image2, params=None):
     config = get_pyflow_default_params()
     if params is not None:
         config.update(params)
+
+    img1 = load_images_pyflow(image1)
+    img2 = load_images_pyflow(image2)
 
     s = time.time()
     u, v, im2W = pyflow.coarse2fine_flow(

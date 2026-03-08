@@ -64,16 +64,27 @@ def build_gmflow(checkpoint_path=KITTI_MODEL, model_config=None, device="cuda"):
     return model
 
 
-def load_image_gmflow(file_path):
+def load_image_gmflow(file):
     """
     Load and preprocess an image the same way GMFlow does in evaluation.
     """
-    ext = splitext(file_path)[-1].lower()
-    if ext not in {".png", ".jpeg", ".ppm", ".jpg"}:
-        raise ValueError(f"Unsupported file extension: {ext}")
+    if isinstance(file, (str, Path)):
+        ext = splitext(file)[-1].lower()
+        if ext not in {".png", ".jpeg", ".ppm", ".jpg"}:
+            raise ValueError(f"Unsupported file extension: {ext}")
 
-    image = Image.open(file_path)
-    image = np.array(image).astype(np.uint8)
+        image = Image.open(file)
+        image = np.array(image).astype(np.uint8)
+
+    elif isinstance(file, Image.Image):
+        image = np.array(file).astype(np.uint8)
+
+    elif isinstance(file, np.ndarray):
+        image = file.astype(np.uint8)
+
+    else:
+        raise TypeError(f"Unsupported input type: {type(file)}")
+
     if image.ndim == 2:
         image = np.tile(image[..., None], (1, 1, 3))
     else:
@@ -86,8 +97,8 @@ def load_image_gmflow(file_path):
 @torch.no_grad()
 def run_gmflow(
     model,
-    image1_path,
-    image2_path,
+    image1,
+    image2,
     inference_params=None,
     device="cuda",
 ):
@@ -104,8 +115,8 @@ def run_gmflow(
     prop_radius_list = config["prop_radius_list"]
     model.eval()
 
-    image1 = load_image_gmflow(image1_path)
-    image2 = load_image_gmflow(image2_path)
+    image1 = load_image_gmflow(image1)
+    image2 = load_image_gmflow(image2)
 
     padder = InputPadder(image1.shape, padding_factor=padding_factor)
     image1, image2 = padder.pad(

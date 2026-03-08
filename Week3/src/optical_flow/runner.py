@@ -60,23 +60,23 @@ def _parse_memflow_method(method: str):
     return is_t, stage
 
 def run_sequence(seq=IMG_SEQ, method="pyflow", method_params=None, img_path=IMG_PATH, gt_path=GT_PATH):
-    img1_path, img2_path = return_image_paths(seq, img_path)
+    img1, img2 = return_image_paths(seq, img_path)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
     if method == "pyflow":
-        from src.optical_flow.pyflow_method import run_pyflow, load_images_pyflow
-        img1, img2 = load_images_pyflow(img1_path, img2_path)
+        from src.optical_flow.pyflow_method import run_pyflow
         flow, info = run_pyflow(img1, img2, params=method_params)
+
     elif method == "gmflow":
         from src.optical_flow.gmflow_method import run_gmflow, build_gmflow
-
         model = build_gmflow(device=device) # Used default ckpt
         flow, info = run_gmflow(
             model, 
-            img1_path, 
-            img2_path, 
+            img1, 
+            img2, 
             inference_params=method_params,
             device=device)
+        
     elif method.startswith("memflow"):
         from src.optical_flow.memflow_method import run_memflow, build_memflow
         is_t, stage = _parse_memflow_method(method)
@@ -113,8 +113,8 @@ def run_sequence(seq=IMG_SEQ, method="pyflow", method_params=None, img_path=IMG_
         flow, info = run_memflow(
             model, 
             cfg,
-            img1_path, 
-            img2_path, 
+            img1, 
+            img2, 
             runtime_config=method_params,
             device=device)
 

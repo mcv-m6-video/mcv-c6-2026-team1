@@ -27,13 +27,22 @@ def get_memflow_default_runtime_config():
     }
 
 
-def load_image_memflow(file_path):
-    ext = splitext(str(file_path))[-1].lower()
-    if ext not in {".png", ".jpg", ".jpeg", ".ppm"}:
-        raise ValueError(f"Unsupported file extension: {ext}")
+def load_image_memflow(file):
+    if isinstance(file, (str, Path)):
+        ext = splitext(str(file))[-1].lower()
+        if ext not in {".png", ".jpg", ".jpeg", ".ppm"}:
+            raise ValueError(f"Unsupported file extension: {ext}")
+        image = Image.open(file)
+        image = np.array(image).astype(np.uint8)
 
-    image = Image.open(file_path)
-    image = np.array(image).astype(np.uint8)
+    elif isinstance(file, Image.Image):
+        image = np.array(file).astype(np.uint8)
+
+    elif isinstance(file, np.ndarray):
+        image = file.astype(np.uint8)
+
+    else:
+        raise TypeError(f"Unsupported input type: {type(file)}")
 
     if image.ndim == 2:
         image = np.tile(image[..., None], (1, 1, 3))
@@ -62,8 +71,8 @@ def build_memflow(cfg, checkpoint_path, device="cuda"):
 def run_memflow(
     model,
     cfg,
-    image1_path,
-    image2_path,
+    image1,
+    image2,
     runtime_config=None,
     device="cuda"
 ):
@@ -80,8 +89,8 @@ def run_memflow(
     np.random.seed(seed)
     random.seed(seed)
 
-    img1 = load_image_memflow(image1_path)
-    img2 = load_image_memflow(image2_path)
+    img1 = load_image_memflow(image1)
+    img2 = load_image_memflow(image2)
 
     images = torch.stack([img1, img2], dim=0)          # [T=2, C, H, W]
     images = images.unsqueeze(0).to(device)            # [1, 2, C, H, W]
