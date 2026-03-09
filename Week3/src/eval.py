@@ -3,17 +3,12 @@
 Evaluate submissions for the AI City Challenge.
 """
 import os
-import sys
 import zipfile
 import tarfile
 import traceback
 import numpy as np
 import pandas as pd
-import scipy as sp
-import motmetrics as mm
-import pytrec_eval as trec
 from PIL import Image
-from collections import defaultdict
 from argparse import ArgumentParser
 import warnings
 warnings.filterwarnings("ignore")
@@ -343,10 +338,12 @@ def eval(test, pred, cid=None):
             g_f = gt_grp.get_group((cid, fid)) if (cid, fid) in gt_grp.groups else pd.DataFrame(columns=['Id', 'X', 'Y', 'Width', 'Height'])
             t_f = ts_grp.get_group((cid, fid)) if (cid, fid) in ts_grp.groups else pd.DataFrame(columns=['Id', 'X', 'Y', 'Width', 'Height'])
 
+            # Get bboxes in xyxy format
             g_box, t_box = g_f[['X', 'Y', 'Width', 'Height']].values.astype(np.float32), t_f[['X', 'Y', 'Width', 'Height']].values.astype(np.float32)
             if len(g_box): g_box[:, 2:] += g_box[:, :2]
             if len(t_box): t_box[:, 2:] += t_box[:, :2]
 
+            # 0-indexed IDs for TrackEval
             g_ids, t_ids = np.array([gt_map[i] for i in g_f['Id']], dtype=np.int64), np.array([tr_map[i] for i in t_f['Id']], dtype=np.int64)
             data["gt_ids"].append(g_ids); data["tracker_ids"].append(t_ids); data["similarity_scores"].append(iou(g_box, t_box))
             data["num_gt_dets"] += len(g_ids); data["num_tracker_dets"] += len(t_ids)
