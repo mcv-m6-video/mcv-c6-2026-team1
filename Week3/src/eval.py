@@ -215,7 +215,7 @@ def eval(test, pred, cid=None):
             imf = get_camera_roi_filepath(cid)
             if not os.path.exists(imf):
                 raise ValueError("Missing ROI image for camera %03d." % cid)
-            img = Image.open( imf, mode='r')
+            img = Image.open( imf, mode='r').convert('L')
             img.load()
             if img.size[0] > img.size[1]:
                 img = img.transpose(Image.TRANSPOSE)
@@ -351,7 +351,8 @@ def eval(test, pred, cid=None):
         h, i = HOTA().eval_sequence(data), Identity().eval_sequence(data)
         return {"HOTA": float(np.mean(h["HOTA"])), "IDF1": float(i["IDF1"])}
 
-    # filter prediction data
+    # filter ROI outliers
+    test = removeOutliersROI(test)
     pred = removeOutliersROI(pred)
 
     # Change: Filter tracks that appear in only one camera (only for Multi-Camera Tracking)
