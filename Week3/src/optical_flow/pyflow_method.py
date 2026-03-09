@@ -23,6 +23,19 @@ def get_pyflow_default_params():
         "colType": 1,   # grayscale
     }
 
+
+def get_pyflow_fast_params():
+    return {
+        "alpha": 0.012,
+        "ratio": 0.75,
+        "minWidth": 30,   # higher = fewer pyramid levels
+        "nOuterFPIterations": 3,
+        "nInnerFPIterations": 1,
+        "nSORIterations": 10,
+        "colType": 1,
+    }
+
+
 def load_images_pyflow(file):
     if isinstance(file, (str, Path)):
         img = cv2.imread(str(file), cv2.IMREAD_UNCHANGED)
@@ -52,8 +65,12 @@ def load_images_pyflow(file):
 
     return img
 
-def run_pyflow(image1, image2, params=None):
-    config = get_pyflow_default_params()
+def run_pyflow(image1, image2, params=None, fast=False):
+    if fast:
+        config = get_pyflow_fast_params()
+    else:
+        config = get_pyflow_default_params()
+        
     if params is not None:
         config.update(params)
 

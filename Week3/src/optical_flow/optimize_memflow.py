@@ -37,7 +37,7 @@ def objective(trial):
 
 if __name__ == "__main__":
     study = optuna.create_study(study_name="MemFlow optimization", directions=["minimize", "minimize"])
-    study.optimize(objective, n_trials=10)
+    study.optimize(objective, n_trials=20)
 
     print(f"Number of trials: {len(study.trials)}")
     print(f"Number of Pareto-optimal trials: {len(study.best_trials)}")

@@ -59,13 +59,29 @@ def _parse_memflow_method(method: str):
 
     return is_t, stage
 
-def run_sequence(seq=IMG_SEQ, method="pyflow", method_params=None, img_path=IMG_PATH, gt_path=GT_PATH):
-    img1, img2 = return_image_paths(seq, img_path)
+def run_sequence(
+        seq=IMG_SEQ, 
+        method="pyflow", 
+        method_params=None,
+        img_path=IMG_PATH, 
+        gt_path=GT_PATH,
+        compute_metrics=True,
+        img1=None,
+        img2=None
+    ):
+
+    if img1 is None or img2 is None:
+        img1, img2 = return_image_paths(seq, img_path)
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
     if method == "pyflow":
         from src.optical_flow.pyflow_method import run_pyflow
-        flow, info = run_pyflow(img1, img2, params=method_params)
+        flow, info = run_pyflow(img1, img2, params=method_params, fast=False)
+
+    elif method == "pyflow_fast":
+        from src.optical_flow.pyflow_method import run_pyflow
+        flow, info = run_pyflow(img1, img2, params=method_params, fast=True)
 
     elif method == "gmflow":
         from src.optical_flow.gmflow_method import run_gmflow, build_gmflow
@@ -121,11 +137,13 @@ def run_sequence(seq=IMG_SEQ, method="pyflow", method_params=None, img_path=IMG_
     else:
         raise ValueError(f"Unknown method: {method}")
 
-    gt_field = load_gt(seq=seq, gt_path=gt_path)
-    msen = compute_msen(gt_field, flow)
-    pepn = compute_pepn(gt_field, flow)
+    if compute_metrics:
+        gt_field = load_gt(seq=seq, gt_path=gt_path)
+        msen = compute_msen(gt_field, flow)
+        pepn = compute_pepn(gt_field, flow)
+        return flow, msen, pepn, info
 
-    return flow, msen, pepn, info
+    return flow, info
 
 
 if __name__ == "__main__":
