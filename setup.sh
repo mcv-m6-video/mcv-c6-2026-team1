@@ -15,11 +15,11 @@ conda init --all
 conda create --name c6-team1 python==3.10.14 -y
 conda activate c6-team1
 
-# GCC compilers for Detectron2
-conda install -c conda-forge gcc_linux-64=11 gxx_linux-64=11 -y
-
 # Install FFmpeg
 conda install -c conda-forge ffmpeg -y
+
+# GCC compilers for Detectron2
+conda install -c conda-forge gcc_linux-64=11 gxx_linux-64=11 -y
 
 ## PyTorch installation
 
@@ -37,7 +37,7 @@ pip install -r requirements.txt
 
 # Directory
 EXTERNAL_DIR="external"
-mkdir "$EXTERNAL_DIR"
+mkdir -p "$EXTERNAL_DIR"
 echo "Downloading pretrained models inside $EXTERNAL_DIR..."
 
 # GMFLow
