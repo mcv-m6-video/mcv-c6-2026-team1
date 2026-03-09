@@ -8,11 +8,11 @@ Before running the code, the data directory must be configured:
 
 1. Create `Week3/data/`.
 2. Obtain initial project data.
-    - 2.1. Extract `AICity_data.zip` into `Week3/data`.
+    - 2.1. Extract `AICity_data.zip` inside `Week3/data`.
     - 2.2. Copy the annotation file `ai_challenge_s03_c010-full_annotation.xml` into `Week3/data`.
 3. Obtain optical flow data.
     - 3.1. Download the <a href="http://www.cvlibs.net/datasets/kitti/">KITTI optical flow dataset</a> (`Flow 2012 > Stereo / Optical Flow`).
-    - 3.2. Create `Week3/data/data_stereo_flow/` and extract the downloaded ZIP file there.
+    - 3.2. Extract the ZIP file into `Week3/data/data_stereo_flow/`.
 4. Obtain multi-object vehicle tracking data.
     - 4.1. Download the <a href="https://www.aicitychallenge.org/2022-data-and-evaluation/">CVPR 2022 AI City Challenge Track 1 dataset</a> (either the official one or the private copy for the master's project).
     - 4.2. Extract the ZIP file and ensure the path of the README file inside it is `Week3/data/AI_CITY_CHALLENGE_2022_TRAIN/ReadMe.txt`. Restructure the folders if needed.
