@@ -12,7 +12,7 @@ IMG_PATH = Path("./data/data_stereo_flow/training/image_0/")
 GT_PATH = Path("./data/data_stereo_flow/training/flow_noc/")
 RESULTS_DIR = Path("./results")
 RESULTS_DIR.mkdir(exist_ok=True)
-PRETRAINED_MODELS_PATH = Path("../external/pretrained/")
+PRETRAINED_MODELS_PATH = Path(__file__).resolve().parents[3] / "external" / "pretrained"
 
 
 

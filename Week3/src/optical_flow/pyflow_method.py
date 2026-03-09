@@ -4,7 +4,8 @@ import sys
 import numpy as np
 from pathlib import Path
 
-sys.path.append("../external/pyflow")
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.append(str(ROOT / "external" / "pyflow"))
 import pyflow
 
 
