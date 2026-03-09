@@ -10,11 +10,15 @@
 
 ## Quick Setup
 
-Clone the repository:
-
+This project uses Git submodules. Clone the repository as below:
 ```bash
-git clone https://github.com/mcv-m6-video/mcv-c6-2026-team1.git
+git clone --recurse-submodules https://github.com/mcv-m6-video/mcv-c6-2026-team1.git
 cd mcv-c6-2026-team1/
+```
+
+If you cloned the repository without submodules, run:
+```bash
+git submodule update --init --recursive
 ```
 
 Setup the environment:

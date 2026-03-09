@@ -32,3 +32,27 @@ pip install git+https://github.com/facebookresearch/detectron2.git --no-build-is
 
 # Other packages are in the requirements.txt
 pip install -r requirements.txt
+
+## Setup Optical Flow models
+
+# Directory
+EXTERNAL_DIR="external"
+mkdir "$EXTERNAL_DIR"
+echo "Downloading pretrained models inside $EXTERNAL_DIR..."
+
+# GMFLow
+ZIP_PATH="$EXTERNAL_DIR/pretrained.zip"
+gdown --id "1d5C5cgHIxWGsFR1vYs5XrQbbUiZl9TX2" -O "$ZIP_PATH"
+unzip -o "$ZIP_PATH" -d "$EXTERNAL_DIR"
+rm "$ZIP_PATH"
+
+# MemFLow
+wget -O "$EXTERNAL_DIR/pretrained/MemFlowNet_kitti.pth" "https://github.com/DQiaole/MemFlow/releases/download/v1.0.0/MemFlowNet_kitti.pth"
+wget -O "$EXTERNAL_DIR/pretrained/MemFlowNet_T_kitti.pth" "https://github.com/DQiaole/MemFlow/releases/download/v1.0.0/MemFlowNet_T_kitti.pth"
+wget -O "$EXTERNAL_DIR/pretrained/MemFlowNet_sintel.pth" "https://github.com/DQiaole/MemFlow/releases/download/v1.0.0/MemFlowNet_sintel.pth"
+wget -O "$EXTERNAL_DIR/pretrained/MemFlowNet_T_sintel.pth" "https://github.com/DQiaole/MemFlow/releases/download/v1.0.0/MemFlowNet_T_sintel.pth"
+
+# PyFlow
+python $EXTERNAL_DIR/pyflow/setup.py build_ext --inplace
+
+echo "Setup complete."
