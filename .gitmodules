@@ -1,9 +1,9 @@
-[submodule "Week3/external/pyflow"]
-	path = Week3/external/pyflow
+[submodule "external/pyflow"]
+	path = external/pyflow
 	url = https://github.com/pathak22/pyflow.git
-[submodule "Week3/external/gmflow"]
-	path = Week3/external/gmflow
+[submodule "external/gmflow"]
+	path = external/gmflow
 	url = https://github.com/haofeixu/gmflow.git
-[submodule "Week3/external/memflow"]
-	path = Week3/external/memflow
+[submodule "external/memflow"]
+	path = external/memflow
 	url = https://github.com/DQiaole/MemFlow.git
