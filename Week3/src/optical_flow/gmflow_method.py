@@ -7,7 +7,8 @@ import numpy as np
 import torch
 from PIL import Image
 
-sys.path.append("../external/gmflow")
+GMFLOW_ROOT = Path(__file__).resolve().parents[3] / "external" / "gmflow"
+sys.path.append(str(GMFLOW_ROOT))
 from gmflow.gmflow import GMFlow
 from utils.utils import InputPadder
 
