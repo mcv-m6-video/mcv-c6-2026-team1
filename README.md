@@ -38,6 +38,7 @@ mcv-c6-2026-team1/
 ├── README.md
 ├── requirements.txt
 ├── setup.sh
+├── external/      # Submodules
 ├── WeekX/
 │   ├── data/      # Data for Week X
 │   ├── src/       # Code for Week X

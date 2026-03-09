@@ -7,11 +7,9 @@ import numpy as np
 import torch
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parents[2]
-MEMFLOW_ROOT = ROOT / "external" / "memflow"
-
-sys.path.append(str(MEMFLOW_ROOT))
-sys.path.append(str(MEMFLOW_ROOT / "core"))
+MEMFLOW_ROOT = sys.path.append("../external/memflow")
+sys.path.append(MEMFLOW_ROOT)
+sys.path.append(f"{MEMFLOW_ROOT}/core")
 
 
 from core.Networks import build_network

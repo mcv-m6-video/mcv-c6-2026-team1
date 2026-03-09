@@ -7,12 +7,11 @@ import numpy as np
 import torch
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(ROOT / "external" / "gmflow"))
+sys.path.append("../external/gmflow")
 from gmflow.gmflow import GMFlow
 from utils.utils import InputPadder
 
-GM_FLOW_MODELS_PATH = Path("./external/pretrained/")
+GM_FLOW_MODELS_PATH = Path("../external/pretrained/")
 KITTI_MODEL = str(GM_FLOW_MODELS_PATH / "gmflow_kitti-285701a8.pth")
 
 

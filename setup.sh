@@ -53,6 +53,8 @@ wget -O "$EXTERNAL_DIR/pretrained/MemFlowNet_sintel.pth" "https://github.com/DQi
 wget -O "$EXTERNAL_DIR/pretrained/MemFlowNet_T_sintel.pth" "https://github.com/DQiaole/MemFlow/releases/download/v1.0.0/MemFlowNet_T_sintel.pth"
 
 # PyFlow
-python $EXTERNAL_DIR/pyflow/setup.py build_ext --inplace
+cd "$EXTERNAL_DIR/pyflow/"
+python setup.py build_ext --inplace
+cd ../..
 
 echo "Setup complete."
