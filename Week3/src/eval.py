@@ -18,23 +18,35 @@ from argparse import ArgumentParser
 import warnings
 warnings.filterwarnings("ignore")
 
+# Change: Add TrackEval and json imports
+from src.tracking.evaluation.methods import HOTA, Identity
+import json
+
+# Change: Get camera ROI image path
+def get_camera_roi_filepath(cid):
+    def get_camera_sequence():
+        if 1 <= cid <= 5: return 1
+        elif 10 <= cid <= 15: return 3
+        elif 16 <= cid <= 40: return 4
+        else: raise ValueError(f"{cid:03d} is not in any sequence!")
+        
+    return f"data/AI_CITY_CHALLENGE_2022_TRAIN/train/S{get_camera_sequence():02d}/c{cid:03d}/roi.jpg"
 
 def get_args():
     parser = ArgumentParser(add_help=False, usage=usageMsg())
     parser.add_argument("data", nargs=2, help="Path to <test_labels> <predicted_labels>.")
     parser.add_argument('--help', action='help', help='Show this help message and exit')
     parser.add_argument('-m', '--mread', action='store_true', help="Print machine readable results (JSON).")
-    parser.add_argument('-ds', '--dstype', type=str, default='train', help="Data set type: train, validation or test.")
-    parser.add_argument('-rd', '--roidir', type=str, default='ROIs', help="Region of Interest images directory.")
+    parser.add_argument('-c', '--cid', type=int, default=None, help="Camera ID for which to evaluate. If None, Multi-Camera Tracking is performed.")
     return parser.parse_args()
 
 
 def usageMsg():
-    return """  python3 eval.py <ground_truth> <prediction> --dstype <dstype>
+    return """  python -m src.eval <ground_truth> <prediction>
 
 Details for expected formats can be found at https://www.aicitychallenge.org/.
 
-See `python3 eval.py --help` for more info.
+See `python -m src.eval --help` for more info.
 
 """
 
@@ -124,13 +136,14 @@ def readData(fpath):
         raise ValueError("Invalid file type %s." % fpath)
 
 
+# Change: Update print_results to output TrackEval dict
 def print_results(summary, mread=False):
     """Print a summary dataframe in a human- or machine-readable format.
     
     Params
     ------
-    summary : pandas.DataFrame
-        Data frame of evaluation results in motmetrics format.
+    summary : dict
+        Dictionary of evaluation results containing HOTA and IDF1 metrics.
     mread : bool
         Whether to print results in machine-readable format (JSON).
     Returns
@@ -139,22 +152,18 @@ def print_results(summary, mread=False):
         Prints results to screen.
     """
     if mread:
-        print('{"results":%s}' % summary.iloc[-1].to_json())
+        print(json.dumps({"results": summary}))
         return
     
-    formatters = {'idf1': '{:2.2f}'.format,
-                  'idp': '{:2.2f}'.format,
-                  'idr': '{:2.2f}'.format}
-    
-    summary = summary[['idf1','idp','idr']]
-    summary['idp'] *= 100
-    summary['idr'] *= 100
-    summary['idf1'] *= 100
-    print(mm.io.render_summary(summary, formatters=formatters, namemap=mm.io.motchallenge_metric_names))
+    print(f"\n{'Metric':<15} {'Score':<10}")
+    print("-" * 30)
+    for k, v in summary.items():
+        print(f"{k:<15} {v*100:.2f}%" if k in ['HOTA', 'IDF1'] else f"{k:<15} {v}")
+    print("-" * 30)
     return
 
 
-def eval(test, pred, **kwargs):
+def eval(test, pred, cid=None):
     """ Evaluate submission.
 
     Params
@@ -164,42 +173,30 @@ def eval(test, pred, **kwargs):
         data frame include ['CameraId','Id', 'FrameId', 'X', 'Y', 'Width', 'Height'].
     pred : pandas.DataFrame
         Predictions for the same frames as in the test data.
-    Kwargs
-    ------
-    mread : bool
-        Whether printed result should be machine readable (JSON). Defaults to False.
-    dstype : str
-        Data set type. One of 'train', 'validation' or 'test'. Defaults to 'train'.
-    roidir : str
-        Directory containing ROI images or where they should be stored.
+    cid : int
+        Optional camera ID for which to filter data. Defaults to None.
+
     Returns
     -------
-    df : pandas.DataFrame
+    df : Dictionary
         Results from the evaluation
     """
     if test is None:
         return None
-    mread  = kwargs.pop('mread', False)
-    dstype = kwargs.pop('dstype', 'train')
-    roidir = kwargs.pop('roidir', 'ROIs')
+    
+    # Change: Filter camera data
+    if cid is not None:
+        test = test[test['CameraId'] == cid]
+        pred = pred[pred['CameraId'] == cid]
     
     # Internal evaluation functions
-    def removeOutliersROI(df, dstype='train', roidir='ROIs', cid=None):
-        """ Remove outliers from the submitted test df that are outsize the region of interest for each camera.
+    def removeOutliersROI(df):
+        """ Remove outliers from the submitted test df that are outside the region of interest for each camera.
         
         Params
         ------
         df : pandas.dfFrame
             df that should be filtered.
-        dstype : str
-            Data set type. One of 'train', 'validation' or 'test'. Defaults to 'train'.
-        roidir : str
-            Directory containing the ROI images. Images are stores in sub-directories <dstype>/c<camid%03d>/roi.jpg,
-            where dstype is the dataset type, and camid is the camera number as a 3-digit 0-padded int.
-            If the ROI data cannot be found, it will be downloaded and stored locally in the <roidir> directory
-            relative to the execution of the eval script. Defaults to 'ROIs'.
-        cid : int
-            Optional camera ID for which to filter data. Defaults to None.
         Returns
         -------
         df : pandas.dfFrame
@@ -219,7 +216,8 @@ def eval(test, pred, **kwargs):
                 Image stored as a 2-d ndarray.
             """
 
-            imf = os.path.join(roidir, dstype, 'c%03d' % cid, 'roi.jpg')
+            # Change: Get ROI from custom path
+            imf = get_camera_roi_filepath(cid)
             if not os.path.exists(imf):
                 raise ValueError("Missing ROI image for camera %03d." % cid)
             img = Image.open( imf, mode='r')
@@ -268,56 +266,22 @@ def eval(test, pred, **kwargs):
                     return True
             return False
 
-
-        # Fetch the ROI data if necessary
-        if not os.path.isdir(roidir):
-            import zipfile
-            import urllib.request
-            import shutil
-            import tempfile
-            os.makedirs(roidir)
-            url = 'https://drive.google.com/uc?export=download&id=1sHQqtzNaUJu1r3AJ8X0sODfe9TIu4C1M'
-            # Download the file from `url` and save it locally under `file_name`:
-            tmp_fname = next(tempfile._get_candidate_names())
-            tmp_dir = tempfile._get_default_tempdir()
-            fzip = os.path.join(tmp_dir, tmp_fname)
-            with urllib.request.urlopen(url) as response, open(fzip, 'wb') as ofh:
-                shutil.copyfileobj(response, ofh)
-            zip_ref = zipfile.ZipFile(fzip, 'r')
-            zip_ref.extractall(roidir)
-            zip_ref.close()
-            os.remove(fzip)
-
         # Store which rows are not ROI outliers
         df['NotOutlier'] = True
 
-        if cid is None: # Process all cameras
-            # Make sure df is sorted appropriately
-            df.sort_values(['CameraId', 'FrameId'], inplace=True)
-            # Load first ROI image
-            tscams = df['CameraId'].unique()
-            cid = tscams[0]
-            roi = loadroi(cid)
-            height, width = roi.shape
-            # Loop over objects and check for outliers
-            for i, row in df.iterrows():
-                if row['CameraId'] != cid:
-                    cid = row['CameraId']
-                    roi = loadroi(cid)
-                    height, width = roi.shape
-                if isROIOutlier(row, roi, height, width):
-                    df.at[i, 'NotOutlier'] = False
-                    
-            return df[df['NotOutlier']].drop(columns=['NotOutlier'])
-        
-        df = df[df['CameraId']==cid].copy()
         # Make sure df is sorted appropriately
         df.sort_values(['CameraId', 'FrameId'], inplace=True)
-        # Load ROI image
+        # Load first ROI image
+        tscams = df['CameraId'].unique()
+        cid = tscams[0]
         roi = loadroi(cid)
         height, width = roi.shape
         # Loop over objects and check for outliers
         for i, row in df.iterrows():
+            if row['CameraId'] != cid:
+                cid = row['CameraId']
+                roi = loadroi(cid)
+                height, width = roi.shape
             if isROIOutlier(row, roi, height, width):
                 df.at[i, 'NotOutlier'] = False
                 
@@ -360,63 +324,47 @@ def eval(test, pred, **kwargs):
 
         return df
         
-    def compare_dataframes_mtmc(gts, ts):
-        """Compute ID-based evaluation metrics for multi-camera multi-object tracking.
+    # Change: Replace compare_dataframes_mtmc and motmetrics logic with TrackEval ---
+    def compare_dataframes_trackeval(gts, ts):
+        def iou(a, b):
+            if len(a) == 0 or len(b) == 0: return np.zeros((len(a), len(b)), dtype=np.float32)
+            inter = np.maximum(0.0, np.minimum(a[:, 2:3], b[:, 2]) - np.maximum(a[:, 0:1], b[:, 0])) * \
+                    np.maximum(0.0, np.minimum(a[:, 3:4], b[:, 3]) - np.maximum(a[:, 1:2], b[:, 1]))
+            return (inter / (((a[:, 2]-a[:, 0])*(a[:, 3]-a[:, 1]))[:, None] + ((b[:, 2]-b[:, 0])*(b[:, 3]-b[:, 1])) - inter + 1e-12)).astype(np.float32)
+
+        gt_map = {id_val: i for i, id_val in enumerate(gts['Id'].unique())}
+        tr_map = {id_val: i for i, id_val in enumerate(ts['Id'].unique())}
+        data = {"gt_ids": [], "tracker_ids": [], "similarity_scores": [], "num_gt_ids": len(gt_map), "num_tracker_ids": len(tr_map), "num_gt_dets": 0, "num_tracker_dets": 0}
+
+        gt_grp, ts_grp = gts.groupby(['CameraId', 'FrameId']), ts.groupby(['CameraId', 'FrameId'])
+        all_frames = pd.concat([gts[['CameraId', 'FrameId']], ts[['CameraId', 'FrameId']]]).drop_duplicates().sort_values(by=['CameraId', 'FrameId']).values
         
-        Params
-        ------
-        gts : pandas.DataFrame
-            Ground truth data.
-        ts : pandas.DataFrame
-            Prediction/test data.
-        Returns
-        -------
-        df : pandas.DataFrame
-            Results of the evaluations in a df with only the 'idf1', 'idp', and 'idr' columns.
-        """
-        gtds = []
-        tsds = []
-        gtcams = gts['CameraId'].drop_duplicates().tolist()
-        tscams = ts['CameraId'].drop_duplicates().tolist()
-        maxFrameId = 0;
+        for cid, fid in all_frames:
+            g_f = gt_grp.get_group((cid, fid)) if (cid, fid) in gt_grp.groups else pd.DataFrame(columns=['Id', 'X', 'Y', 'Width', 'Height'])
+            t_f = ts_grp.get_group((cid, fid)) if (cid, fid) in ts_grp.groups else pd.DataFrame(columns=['Id', 'X', 'Y', 'Width', 'Height'])
 
-        for k in sorted(gtcams):
-            gtd = gts.query('CameraId == %d' % k)
-            gtd = gtd[['FrameId', 'Id', 'X', 'Y', 'Width', 'Height']]
-            # max FrameId in gtd only
-            mfid = gtd['FrameId'].max()
-            gtd['FrameId'] += maxFrameId
-            gtd = gtd.set_index(['FrameId', 'Id'])
-            gtds.append(gtd)
+            g_box, t_box = g_f[['X', 'Y', 'Width', 'Height']].values.astype(np.float32), t_f[['X', 'Y', 'Width', 'Height']].values.astype(np.float32)
+            if len(g_box): g_box[:, 2:] += g_box[:, :2]
+            if len(t_box): t_box[:, 2:] += t_box[:, :2]
 
-            if k in tscams:
-                tsd = ts.query('CameraId == %d' % k)
-                tsd = tsd[['FrameId', 'Id', 'X', 'Y', 'Width', 'Height']]
-                # max FrameId among both gtd and tsd
-                mfid = max(mfid, tsd['FrameId'].max())
-                tsd['FrameId'] += maxFrameId
-                tsd = tsd.set_index(['FrameId', 'Id'])
-                tsds.append(tsd)
+            g_ids, t_ids = np.array([gt_map[i] for i in g_f['Id']], dtype=np.int64), np.array([tr_map[i] for i in t_f['Id']], dtype=np.int64)
+            data["gt_ids"].append(g_ids); data["tracker_ids"].append(t_ids); data["similarity_scores"].append(iou(g_box, t_box))
+            data["num_gt_dets"] += len(g_ids); data["num_tracker_dets"] += len(t_ids)
 
-            maxFrameId += mfid
+        h, i = HOTA().eval_sequence(data), Identity().eval_sequence(data)
+        return {"HOTA": float(np.mean(h["HOTA"])), "IDF1": float(i["IDF1"])}
 
-        # compute multi-camera tracking evaluation stats
-        multiCamAcc = mm.utils.compare_to_groundtruth(pd.concat(gtds), pd.concat(tsds), 'iou')
-        metrics=list(mm.metrics.motchallenge_metrics)
-        metrics.extend(['num_frames','idfp','idfn','idtp'])
-        summary = mh.compute(multiCamAcc, metrics=metrics, name='MultiCam')
-
-        return summary
-
-    mh = mm.metrics.create()
-    
     # filter prediction data
-    pred = removeOutliersROI(pred, dstype=dstype, roidir=roidir)
-    # pred = removeOutliersSingleCam(pred) # COMMENTED OUT FOR MTSC, TODO: REMOVE IN WEEK4 
+    pred = removeOutliersROI(pred)
+
+    # Change: Filter tracks that appear in only one camera (only for Multi-Camera Tracking)
+    if cid is None:
+        pred = removeOutliersSingleCam(pred)
+
     pred = removeRepetition(pred)
     
     # evaluate results
-    return compare_dataframes_mtmc(test, pred)
+    return compare_dataframes_trackeval(test, pred)
 
 
 def usage(msg=None):
@@ -428,14 +376,14 @@ def usage(msg=None):
 
 
 if __name__ == '__main__':
-    args = get_args();
+    args = get_args()
     if not args.data or len(args.data) < 2:
-        usage("Incorrect number of arguments. Must provide paths for the test (ground truth) and predicitons.")
+        usage("Incorrect number of arguments. Must provide paths for the test (ground truth) and predictions.")
     
     test = readData(args.data[0])
     pred = readData(args.data[1])
     try:
-        summary = eval(test, pred, mread=args.mread, dstype=args.dstype, roidir=args.roidir)
+        summary = eval(test, pred, args.cid)
         print_results(summary, mread=args.mread)
     except Exception as e:
         if args.mread:
