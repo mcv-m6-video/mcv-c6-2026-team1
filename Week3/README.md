@@ -1,18 +1,27 @@
-# Week 2: Motion Estimation and Tracking
+# Week 3: Optical Flow and Multi-Object Single-Camera Tracking
 
-This folder contains the source code and documentation for Week 3. The goal is to implement and evaluate optical flow methods and multi-target single camera tracking.
+This folder contains the source code and documentation for Week 3. The goal is to implement and evaluate optical flow methods to improve our tracking algorithm from Week 2. We apply the new tracking pipeline to multi-object, single camera tracking.
 
 ## Data Setup
 
 Before running the code, the data directory must be configured:
 
 1. Create `Week3/data/`.
-2. Extract `...` into it.
-3. Copy the annotation file `ai_challenge_s03_c010-full_annotation.xml` into it.
+2. Obtain initial project data.
+    - 2.1. Extract `AICity_data.zip` into `Week3/data`.
+    - 2.2. Copy the annotation file `ai_challenge_s03_c010-full_annotation.xml` into `Week3/data`.
+3. Obtain optical flow data.
+    - 3.1. Download the <a href="http://www.cvlibs.net/datasets/kitti/">KITTI optical flow dataset</a> (`Flow 2012 > Stereo / Optical Flow`).
+    - 3.2. Create `Week3/data/data_stereo_flow/` and extract the downloaded ZIP file there.
+4. Obtain multi-object vehicle tracking data.
+    - 4.1. Download the <a href="https://www.aicitychallenge.org/2022-data-and-evaluation/">CVPR 2022 AI City Challenge Track 1 dataset</a> (either the official one or the private copy for the master's project).
+    - 4.2. Extract the ZIP file and ensure the path of the README file inside it is `Week3/data/AI_CITY_CHALLENGE_2022_TRAIN/ReadMe.txt`. Restructure the folders if needed.
 
 ## Source Code
 
-⚠️ **IMPORTANT:** All scripts must be executed from `Week2/`.
+⚠️ **IMPORTANT:** All scripts must be executed from `Week3/`.
+
+**TODO FROM HERE**
 
 Our code for this week is split in 2 modules (one for each task): `detection` and `tracking`. Therefore, there is a main entry point for each: `Week2/src/detection/run_detection.py` and `Week2/src/tracking/run_tracking.py`, respectively. The former handles car detection, whereas the latter targets tracking.
 
@@ -75,28 +84,3 @@ Week2/
 │   ├── video_utils.py                              # Video manipulation utilities
 └── └── view_video.ipynb                            # Notebook for video visualization
 ```
-
-
-
-### Comment for Week3:
-## Clone repository
-
-This project uses Git submodules. Clone the repository with:
-```bash
-git clone --recurse-submodules <repo-url>
-```
-If you already cloned the repository without submodules, run:
-```bash
-git submodule update --init --recursive
-```
-
-## Install pretrained models and project assets
-Run the setup script:
-```bash
-bash src/optical_flow/setup.sh
-```
-This script:
-1) initializes submodules
-2) downloads the pretrained models
-3) extracts them into external/pretrained
-4) Compiles PyFlow files directly
