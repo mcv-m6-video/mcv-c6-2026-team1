@@ -1,5 +1,5 @@
 # video_utils.py
-
+import os
 import subprocess
 import cv2
 import IPython.display as IPy
@@ -7,6 +7,7 @@ import time
 from tqdm import tqdm
 from collections import defaultdict
 from src.detection.evaluation import load_gts, load_preds
+from src.eval import get_gt_data, get_sequence_dir
 
 DEFAULT_VIDEO_PATH = "data/AICity_data/train/S03/c010/vdo.avi"
 
@@ -34,17 +35,18 @@ def load_video(video_path=DEFAULT_VIDEO_PATH):
             extracted_frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         else:
             raise IOError(f"Frame {frame_idx} could not be read.")
-        
+    cap.release()
+    
     return extracted_frames
 
 def play_video(video_path=DEFAULT_VIDEO_PATH, width=640, height=360):
     """
     Plays a video inside a Jupyter Notebook cell.
     """
-    cap = load_video(video_path)
+    cap = init_video(video_path)
 
     # Get FPS
-    fps = max(20, cap.get(cv2.CAP_PROP_FPS))
+    fps = 20
     frame_duration = 1.0 / fps
 
     try:
@@ -84,6 +86,32 @@ def _draw_bboxes(frame, frame_bboxes, color=(0, 255, 0)):
         x1, y1 = int(x), int(y)
         x2, y2 = int(x + w), int(y + h)
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+
+def _draw_bboxes_with_id(frame, frame_bboxes_with_ids, color=(0, 255, 0)):
+    """
+    Draws bounding boxes and their tracking IDs with a background for readability.
+    """
+    for (bbox, obj_id) in frame_bboxes_with_ids:
+        x, y, w, h = bbox
+        x1, y1 = int(x), int(y)
+        x2, y2 = int(x + w), int(y + h)
+        
+        # Draw bounding box
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+        
+        # Draw ID text background
+        text = f"ID: {obj_id}"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 1.2
+        thickness = 3
+        (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+        
+        # Calculate background rectangle coordinates
+        bg_y1 = max(0, y1 - text_height - 10)
+        cv2.rectangle(frame, (x1, bg_y1), (x1 + text_width + 4, y1), color, -1)
+        
+        # Draw text (white text over the colored background)
+        cv2.putText(frame, text, (x1 + 2, y1 - 4), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
 def load_gt_json():
     return _get_bboxes_by_frame(load_gts()["annotations"])
@@ -130,6 +158,83 @@ def extract_video(
         _draw_bboxes(frame, gts[frame_idx])
         if preds_dir:
             _draw_bboxes(frame, preds[frame_idx], color=(0, 0, 255))
+        
+        # Write frame to the output file
+        out.write(frame)
+
+    cap.release()
+    out.release()
+    print(f"Frames successfully saved to '{output_path}'.")
+
+def _get_bboxes_by_frame_ai_city(gt_df, cam_id):
+    """
+    Filters the AI City ground truth DataFrame for a specific camera 
+    and groups the bounding boxes and IDs by frame ID.
+    """
+    bboxes_by_frame = defaultdict(list)
+    
+    # Filter by the requested camera
+    df_cam = gt_df[gt_df['CameraId'] == cam_id]
+    
+    for _, row in df_cam.iterrows():
+        # Extract the frame ID and the bounding box coordinates
+        bbox = (row['X'], row['Y'], row['Width'], row['Height'])
+        bboxes_by_frame[int(row['FrameId'])].append((bbox, int(row['Id'])))
+        
+    return bboxes_by_frame
+
+def extract_video_AI_city(
+    seq_id,
+    cam_id,
+    video_path=None,
+    output_path="output.mp4",
+    start_frame=0,
+    end_frame=-1,
+):
+    """
+    Extracts a video segment from the AI City Challenge dataset showing GTs. 
+    GTs are obtained dynamically based on the camera ID. If 'video_path' is not None, it overlays them for predictions.
+
+    """
+    gt_df = get_gt_data()
+    
+    # Process GTs for the specific camera
+    gts = _get_bboxes_by_frame_ai_city(gt_df, cam_id)
+        
+    # Original video
+    if video_path is None:
+        video_path = os.path.join(get_sequence_dir(seq_id), f"c{cam_id:03d}", "vdo.avi")
+
+    cap = init_video(video_path)
+
+    n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    size = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+
+    # Fast-forward to the start_frame efficiently
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+    
+    # Initialize OpenCV VideoWriter
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+    out = cv2.VideoWriter(output_path, fourcc, fps, size)
+
+    if end_frame < 0 or n_frames < end_frame:
+        end_frame = n_frames
+
+    print(f"Extracting frames {start_frame}-{end_frame} from {video_path}...")
+
+    for frame_idx in tqdm(range(start_frame, end_frame)):
+        ret, frame = cap.read()
+        if not ret: 
+            print("End of video stream reached.")
+            break
+
+        # AI City Challenge frames are 1-indexed, but OpenCV frame_idx is 0-indexed.
+        ai_city_frame_idx = frame_idx + 1
+
+        # Draw ground truths if they exist for this frame
+        if ai_city_frame_idx in gts:
+            _draw_bboxes_with_id(frame, gts[ai_city_frame_idx])
         
         # Write frame to the output file
         out.write(frame)

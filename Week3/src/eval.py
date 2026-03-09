@@ -17,6 +17,13 @@ warnings.filterwarnings("ignore")
 from src.tracking.evaluation.methods import HOTA, Identity
 import json
 
+# Change: Custom data dir
+AI_CITY_DATA_DIR = "data/AI_CITY_CHALLENGE_2022_TRAIN/train"
+def get_gt_data():
+    return readData("data/AI_CITY_CHALLENGE_2022_TRAIN/eval/ground_truth_train.txt")
+def get_sequence_dir(seq_id):
+    return os.path.join(AI_CITY_DATA_DIR, f"S{seq_id:02d}")
+
 # Change: Get camera ROI image path
 def get_camera_roi_filepath(cid):
     def get_camera_sequence():
@@ -25,11 +32,11 @@ def get_camera_roi_filepath(cid):
         elif 16 <= cid <= 40: return 4
         else: raise ValueError(f"{cid:03d} is not in any sequence!")
         
-    return f"data/AI_CITY_CHALLENGE_2022_TRAIN/train/S{get_camera_sequence():02d}/c{cid:03d}/roi.jpg"
+    return f"{AI_CITY_DATA_DIR}/S{get_camera_sequence():02d}/c{cid:03d}/roi.jpg"
 
 def get_args():
     parser = ArgumentParser(add_help=False, usage=usageMsg())
-    parser.add_argument("data", nargs=2, help="Path to <test_labels> <predicted_labels>.")
+    parser.add_argument("data", help="Path to <predicted_labels>.")
     parser.add_argument('--help', action='help', help='Show this help message and exit')
     parser.add_argument('-m', '--mread', action='store_true', help="Print machine readable results (JSON).")
     parser.add_argument('-c', '--cid', type=int, default=None, help="Camera ID for which to evaluate. If None, Multi-Camera Tracking is performed.")
@@ -375,11 +382,9 @@ def usage(msg=None):
 
 if __name__ == '__main__':
     args = get_args()
-    if not args.data or len(args.data) < 2:
-        usage("Incorrect number of arguments. Must provide paths for the test (ground truth) and predictions.")
     
-    test = readData(args.data[0])
-    pred = readData(args.data[1])
+    test = get_gt_data()
+    pred = readData(args.data)
     try:
         summary = eval(test, pred, args.cid)
         print_results(summary, mread=args.mread)
