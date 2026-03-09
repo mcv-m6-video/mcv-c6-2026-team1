@@ -1,4 +1,5 @@
 import time
+import torch
 from pathlib import Path
 from os.path import splitext
 import sys
@@ -97,6 +98,8 @@ def run_memflow(
 
     images = 2 * (images / 255.0) - 1.0
 
+    model = model.to(device)
+    model.eval()
     processor = inference_core.InferenceCore(model, config=cfg)
 
     flow_prev = None

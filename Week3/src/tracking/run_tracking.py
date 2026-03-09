@@ -7,6 +7,7 @@ from pathlib import Path
 from src.video_utils import load_video
 from src.detection.run_detection import build_model, run_detection
 from src.tracking.trackers import track_video_overlap, track_video_sort
+from src.tracking.tracking_utils import save_tracking_result_txt
 from src.tracking.evaluation.main import evaluate_tracking
 
 
@@ -16,7 +17,7 @@ def save_metrics_json(metrics, args):
     Saves metrics dict nicely formatted to JSON.
     """
     out_video_path = Path(args.output_path)
-    metrics_dir = out_video_path.parent / "metrics"
+    metrics_dir = out_video_path.parent / "trk_metrics"
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
     # Experiment name
@@ -79,13 +80,13 @@ def detect_objects(args, frame_idxs=None):
     video_frames = load_video(args.input_path)
 
     # Run detection in minibatches
-    det_model = build_model(args.detection_model, args.weights)
+    det_model = build_model(args.weights)
     preds_by_frame = run_detection(video_frames, det_model, frame_idxs=frame_idxs, batch_size=args.batch_size)
 
     return preds_by_frame, video_frames
 
 
-def run_one_experiment(args, preds_by_frame, video_frames):
+def run_tracking(args, preds_by_frame, video_frames, txt_path=None, cam_id=None):
     out_path = Path(args.output_path)
 
     out = None
@@ -127,6 +128,9 @@ def run_one_experiment(args, preds_by_frame, video_frames):
             flow_alpha=args.flow_alpha
         )
 
+    if txt_path is not None and cam_id is not None:
+        save_tracking_result_txt(pred, txt_path, cam_id)
+
     metrics = evaluate_tracking(pred)
     json_metrics, metrics_path = save_metrics_json(metrics, args)
 
@@ -142,12 +146,12 @@ def parse_args():
 
     # Detection model (your pipeline)
     p.add_argument("-d", "--detection_model", type=str, default="yolo", choices=["yolo", "faster_rcnn"])
-    p.add_argument("--weights", type=str, default="./src/optical_flow/tracking/detection/weights/yolo_best.pt", help="Path to weights")
+    p.add_argument("--weights", type=str, default="./src/detection/weights/yolo_best.pt", help="Path to weights")
     p.add_argument("--batch_size", type=int, default=32)
 
     # Data args
-    p.add_argument("-i", "--input_path", type=str, default="./data/tracking/AICity_data/train/S03/c010/vdo.avi")
-    p.add_argument("-o", "--output_path", type=str, default="./src/optical_flow/tracking/results/test_video.mp4")
+    p.add_argument("-i", "--input_path", type=str, default="./data/AICity_data/train/S03/c010/vdo.avi")
+    p.add_argument("-o", "--output_path", type=str, default="./results/test_video.mp4")
 
     # Detection filters
     p.add_argument("--min_confidence", type=float, default=0.3)
@@ -170,8 +174,8 @@ def main(args):
     # Run detection just once
     preds_by_frame, video_frames = detect_objects(args)
 
-    print(f"Run one experiment.")
-    run_one_experiment(args, preds_by_frame, video_frames)
+    print(f"Run tracking.")
+    run_tracking(args, preds_by_frame, video_frames, txt_path = "./test.txt", cam_id=1)
 
 
 if __name__ == "__main__":

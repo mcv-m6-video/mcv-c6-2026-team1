@@ -30,9 +30,9 @@ def get_pyflow_fast_params():
         "alpha": 0.012,
         "ratio": 0.75,
         "minWidth": 30,   # higher = fewer pyramid levels
-        "nOuterFPIterations": 3,
+        "nOuterFPIterations": 2,
         "nInnerFPIterations": 1,
-        "nSORIterations": 10,
+        "nSORIterations": 6,
         "colType": 1,
     }
 

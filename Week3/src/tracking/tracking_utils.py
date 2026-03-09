@@ -1,8 +1,10 @@
 import cv2
 import numpy as np
+from tqdm import tqdm
 from collections import OrderedDict
 from typing import List, Dict, Any
 
+from src.optical_flow.runner import build_flow_model, run_sequence
 
 
 # Tracking objects
@@ -121,6 +123,72 @@ def xyxy_to_xywh(dets_xyxy):
     return np.stack([x1, y1, w, h], axis=1).astype(np.float32)
 
 
+# Save tracking results as .txt
+def xyxy_to_xywh_int(box_xyxy):
+    """
+    Convert [x1, y1, x2, y2] to integer [xmin, ymin, width, height].
+
+    Assumes x2 >= x1 and y2 >= y1.
+    Rounds coordinates to nearest integer.
+    """
+    x1, y1, x2, y2 = box_xyxy[:4]
+
+    xmin = int(round(float(x1)))
+    ymin = int(round(float(y1)))
+    xmax = int(round(float(x2)))
+    ymax = int(round(float(y2)))
+
+    width = xmax - xmin
+    height = ymax - ymin
+
+    return xmin, ymin, width, height
+
+
+def tracking_result_to_lines(tracking_result, camera_id):
+    """
+    Convert TrackingResult into a list of submission lines.
+
+    Output format per line:
+    camera_id obj_id frame_id xmin ymin width height -1 -1
+    """
+    lines = []
+
+    for frame in tracking_result.frames:
+        frame_id = int(frame.frame_idx)
+
+        track_ids = np.asarray(frame.track_ids)
+        boxes_xyxy = np.asarray(frame.boxes_xyxy)
+
+        if len(track_ids) != len(boxes_xyxy):
+            raise ValueError(
+                f"Frame {frame_id}: number of track_ids ({len(track_ids)}) "
+                f"does not match number of boxes ({len(boxes_xyxy)})."
+            )
+
+        for obj_id, box in zip(track_ids, boxes_xyxy):
+            obj_id = int(obj_id)
+            xmin, ymin, width, height = xyxy_to_xywh_int(box)
+
+            line = f"{camera_id} {obj_id} {frame_id} {xmin} {ymin} {width} {height} -1 -1"
+            lines.append(line)
+
+    return lines
+
+
+def save_tracking_result_txt(
+    tracking_result,
+    output_path,
+    camera_id
+):
+    """
+    Save TrackingResult to a txt file.
+    """
+    lines = tracking_result_to_lines(tracking_result, camera_id=camera_id)
+    with open(output_path, "w", encoding="utf-8") as f:
+        for line in lines:
+            f.write(line + "\n")
+
+
 ## Optical flow utils
 def clip_bbox_xyxy(bbox, h, w):
     x1, y1, x2, y2 = bbox
@@ -195,3 +263,46 @@ def blend_bboxes_xyxy(box_a, box_b, alpha=0.5):
     box_a = np.asarray(box_a, dtype=np.float32)
     box_b = np.asarray(box_b, dtype=np.float32)
     return alpha * box_a + (1.0 - alpha) * box_b
+
+
+def precompute_flows(video_frames, method="memflow_t_sintel", method_params=None, flow_stride=1, scale=0.6):
+    model, cfg, device = build_flow_model(method=method)
+
+    flow_by_frame = {0: None}
+    last_flow = None
+
+    for frame_idx in tqdm(range(1, len(video_frames)), desc="Pre-computing optical flows."):
+        img1 = video_frames[frame_idx - 1]
+        img2 = video_frames[frame_idx]
+
+        if scale != 1.0:
+            h, w = img1.shape[:2]
+            new_w, new_h = int(w * scale), int(h * scale)
+
+            img1_small = cv2.resize(img1, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+            img2_small = cv2.resize(img2, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        else:
+            img1_small, img2_small = img1, img2
+            h, w = img1.shape[:2]
+            new_h, new_w = h, w
+
+        if frame_idx % flow_stride == 0:
+            flow_uv, _ = run_sequence(
+                method=method,
+                method_params=method_params,
+                compute_metrics=False,
+                img1=img1_small,
+                img2=img2_small,
+                model=model,
+                cfg=cfg,
+                device=device,
+            )
+
+            if scale != 1.0:
+                flow_uv = cv2.resize(flow_uv, (w, h), interpolation=cv2.INTER_LINEAR)
+                flow_uv[..., 0] *= (w / new_w)
+                flow_uv[..., 1] *= (h / new_h)
+
+            last_flow = flow_uv
+        flow_by_frame[frame_idx] = last_flow
+    return flow_by_frame

@@ -5,7 +5,7 @@ import numpy as np
 from filterpy.kalman import KalmanFilter
 from scipy.optimize import linear_sum_assignment
 
-from src.optical_flow.tracking.tracking_utils import compute_iou_xyxy, predict_bbox_with_flow, blend_bboxes_xyxy
+from src.tracking.tracking_utils import compute_iou_xyxy, predict_bbox_with_flow, blend_bboxes_xyxy
 
 
 def convert_bbox_to_z(bbox):

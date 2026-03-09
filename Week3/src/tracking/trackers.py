@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+from tqdm import tqdm
 
 from src.tracking.sort import Sort
 from src.tracking.tracking_utils import (
@@ -11,7 +12,7 @@ from src.tracking.tracking_utils import (
     compute_iou_xyxy,
     xyxy_to_xywh,
     predict_bbox_with_flow,
-    blend_bboxes_xyxy)
+    precompute_flows)
 
 from src.optical_flow.runner import run_sequence
 
@@ -209,18 +210,19 @@ def track_video_overlap(
     tracks_by_id = {}
     next_track_id = 0
     result_frames = []
-    prev_frame_rgb = None
+    
+    flow_by_frame = None
+    if use_flow:
+        flow_by_frame = precompute_flows(video_frames, method="memflow_t_sintel", flow_stride=2, scale=0.6)
 
     tracker_fn = max_overlap_tracker if matching == "greedy" else hungarian_overlap_tracker
 
-    for frame_idx, frame_rgb in enumerate(video_frames):
+    for frame_idx, frame_rgb in tqdm(enumerate(video_frames), desc="Computing track with Max Overlap"):
         frame = rgb_to_bgr(frame_rgb)
         pred = preds_by_frame.get(frame_idx, None)
         boxes, _, classes = filter_detections_for_frame(pred, min_confidence)
 
-        flow_uv = None
-        if use_flow and prev_frame_rgb is not None:
-            flow_uv, _ = run_sequence(method="memflow_t_sintel", compute_metrics=False, img1=prev_frame_rgb, img2=frame_rgb)
+        flow_uv = flow_by_frame[frame_idx] if use_flow else None
 
         active_tracks, next_track_id = tracker_fn(
             predicted_boxes=boxes,
@@ -234,8 +236,6 @@ def track_video_overlap(
             flow_uv=flow_uv,
             image_shape=frame_rgb.shape,
         )
-
-        prev_frame_rgb = frame_rgb
 
         for track in active_tracks:
             tracks_by_id[track.id] = track
@@ -269,16 +269,17 @@ def track_video_sort(
     sort_by_class = {}
     tracks_by_id = {}
     result_frames = []
-    prev_frame_rgb = None
 
-    for frame_idx, frame_rgb in enumerate(video_frames):
+    flow_by_frame = None
+    if use_flow:
+        flow_by_frame = precompute_flows(video_frames, method="memflow_t_sintel", flow_stride=2, scale=0.6)
+
+    for frame_idx, frame_rgb in tqdm(enumerate(video_frames), desc= "Computing track with Max Overlap"):
         frame = rgb_to_bgr(frame_rgb)
         pred = preds_by_frame.get(frame_idx, None)
         boxes_xyxy, scores, classes = filter_detections_for_frame(pred, min_confidence)
 
-        flow_uv = None
-        if use_flow and prev_frame_rgb is not None:
-            flow_uv, _ = run_sequence(method="memflow_t_sintel", compute_metrics=False, img1=prev_frame_rgb, img2=frame_rgb)
+        flow_uv = flow_by_frame[frame_idx] if use_flow else None
 
         unique_classes_in_frame = set(classes.tolist())
         all_classes_to_step = set(sort_by_class.keys()) | unique_classes_in_frame
@@ -330,7 +331,6 @@ def track_video_sort(
 
                 active_tracks_this_frame.append(tracks_by_id[tid])
 
-        prev_frame_rgb = frame_rgb
         result_frames.append(_build_tracking_frame(frame_idx, active_tracks_this_frame))
 
         if save_video:

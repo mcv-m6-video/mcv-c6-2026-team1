@@ -59,42 +59,19 @@ def _parse_memflow_method(method: str):
 
     return is_t, stage
 
-def run_sequence(
-        seq=IMG_SEQ, 
-        method="pyflow", 
-        method_params=None,
-        img_path=IMG_PATH, 
-        gt_path=GT_PATH,
-        compute_metrics=True,
-        img1=None,
-        img2=None
-    ):
 
-    if img1 is None or img2 is None:
-        img1, img2 = return_image_paths(seq, img_path)
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+def build_flow_model(method="memflow_t_sintel", device=None):
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     
-    if method == "pyflow":
-        from src.optical_flow.pyflow_method import run_pyflow
-        flow, info = run_pyflow(img1, img2, params=method_params, fast=False)
+    if method == "gmflow":
+        from src.optical_flow.gmflow_method import build_gmflow
+        model = build_gmflow(device=device)
+        return model, None, device
 
-    elif method == "pyflow_fast":
-        from src.optical_flow.pyflow_method import run_pyflow
-        flow, info = run_pyflow(img1, img2, params=method_params, fast=True)
-
-    elif method == "gmflow":
-        from src.optical_flow.gmflow_method import run_gmflow, build_gmflow
-        model = build_gmflow(device=device) # Used default ckpt
-        flow, info = run_gmflow(
-            model, 
-            img1, 
-            img2, 
-            inference_params=method_params,
-            device=device)
-        
     elif method.startswith("memflow"):
-        from src.optical_flow.memflow_method import run_memflow, build_memflow
+        from src.optical_flow.memflow_method import build_memflow
+
         is_t, stage = _parse_memflow_method(method)
 
         if not is_t:
@@ -104,7 +81,7 @@ def run_sequence(
                 from configs.kitti_memflownet import get_cfg
             else:
                 raise NotImplementedError(f"Unsupported MemFlow stage: {stage}")
-            
+
             ckpt = str(PRETRAINED_MODELS_PATH / "MemFlowNet_kitti.pth")
             name = "MemFlowNet"
 
@@ -125,14 +102,69 @@ def run_sequence(
             "stage": stage,
             "restore_ckpt": ckpt,
         })
+
         model = build_memflow(cfg, cfg.restore_ckpt, device=device)
+        return model, cfg, device
+
+    return None, None, None
+
+
+def run_sequence(
+        seq=IMG_SEQ,
+        method="pyflow",
+        method_params=None,
+        img_path=IMG_PATH,
+        gt_path=GT_PATH,
+        compute_metrics=True,
+        img1=None,
+        img2=None,
+        model=None,
+        cfg=None,
+        device=None
+    ):
+
+    if img1 is None or img2 is None:
+        img1, img2 = return_image_paths(seq, img_path)
+
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    if method == "pyflow":
+        from src.optical_flow.pyflow_method import run_pyflow
+        flow, info = run_pyflow(img1, img2, params=method_params, fast=False)
+
+    elif method == "pyflow_fast":
+        from src.optical_flow.pyflow_method import run_pyflow
+        flow, info = run_pyflow(img1, img2, params=method_params, fast=True)
+
+    elif method == "gmflow":
+        from src.optical_flow.gmflow_method import run_gmflow
+
+        if model is None:
+            model, cfg, device = build_flow_model(method=method, device=device)
+
+        flow, info = run_gmflow(
+            model,
+            img1,
+            img2,
+            inference_params=method_params,
+            device=device
+        )
+
+    elif method.startswith("memflow"):
+        from src.optical_flow.memflow_method import run_memflow
+
+        if model is None or cfg is None:
+            model, cfg, device = build_flow_model(method=method, device=device)
+
         flow, info = run_memflow(
-            model, 
+            model,
             cfg,
-            img1, 
-            img2, 
+            img1,
+            img2,
             runtime_config=method_params,
-            device=device)
+            device=device
+        )
 
     else:
         raise ValueError(f"Unknown method: {method}")
