@@ -1,6 +1,5 @@
 import cv2
 import json
-import copy
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -9,12 +8,6 @@ from src.video_utils import load_video
 from src.detection.run_detection import build_model, run_detection
 from src.tracking.trackers import track_video_overlap, track_video_sort
 from src.tracking.evaluation.main import evaluate_tracking
-from src.tracking.experiments import EXPERIMENTS
-from src.tracking.plotting import (plot_assa_vs_deta_hota,
-                                   plot_hota0_vs_loca0,
-                                   plot_hota_vs_alpha,
-                                   plot_hota_vs_idf1,
-                                   plot_idp_vs_idr)
 
 
 # JSON utils
@@ -117,7 +110,8 @@ def run_one_experiment(args, preds_by_frame, video_frames):
             iou_th=args.min_iou,
             max_age=args.max_age,
             out=out,
-            save_video=args.save_video
+            save_video=args.save_video,
+            use_flow=args.use_flow
         )
     else:
         pred = track_video_sort(
@@ -128,68 +122,15 @@ def run_one_experiment(args, preds_by_frame, video_frames):
             iou_th=args.min_iou,
             max_age=args.max_age,
             out=out,
-            save_video=args.save_video
+            save_video=args.save_video,
+            use_flow=args.use_flow,
+            flow_alpha=args.flow_alpha
         )
 
     metrics = evaluate_tracking(pred)
     json_metrics, metrics_path = save_metrics_json(metrics, args)
 
     return json_metrics, metrics_path
-
-
-def sweep_and_plot(args, preds_by_frame, video_frames):
-    out_video_path = Path(args.output_path)
-
-    # Save folder
-    metrics_dir = out_video_path.parent / "metrics"
-    plots_dir = out_video_path.parent / "plots"
-    metrics_dir.mkdir(parents=True, exist_ok=True)
-    plots_dir.mkdir(parents=True, exist_ok=True)
-
-    results = []
-
-    # Run experiments (and save jsons)
-    for cfg in EXPERIMENTS:
-        exp_args = copy.deepcopy(args)
-        for k, v in cfg.items():
-            setattr(exp_args, k, v)
-
-        exp_args.save_video = False
-
-        metrics, path = run_one_experiment(exp_args, preds_by_frame, video_frames)
-        results.append({
-            "config": cfg,
-            "metrics": metrics,
-            "path": str(path),
-        })
-
-    # Pick best by mean HOTA
-    best = max(results, key=lambda r: r["metrics"]["summary"]["HOTA"])
-
-    # Build runs for plotting
-    runs = [load_run_json(Path(r["path"])) for r in results]    
-
-    # AssA vs DetA for BEST run
-    best_label = Path(best["path"]).stem
-    best_run = next((r for r in runs if r["label"] == best_label), runs[0])
-
-    plot_assa_vs_deta_hota(best_run["raw"], out_path=plots_dir / "assa_vs_deta_best.png", percent=True)
-
-    # HOTA vs alpha for ALL runs
-    plot_hota_vs_alpha(runs, out_path=plots_dir / "hota_vs_alpha.png")
-
-    # HOTA(0) vs LocA(0) across ALL runs
-    plot_hota0_vs_loca0(runs, out_path=plots_dir / "hota0_vs_loca0.png", percent=True)
-
-    # IDP vs IDR across ALL runs
-    plot_idp_vs_idr(runs, out_path=plots_dir / "idp_vs_idr.png")
-
-    # HOTA vs IDF1 across ALL runs
-    plot_hota_vs_idf1(runs, out_path=plots_dir / "hota_vs_idf1.png")
-
-    print("Best results:", best)
-
-    return best, results
 
 
 def parse_args():
@@ -201,12 +142,12 @@ def parse_args():
 
     # Detection model (your pipeline)
     p.add_argument("-d", "--detection_model", type=str, default="yolo", choices=["yolo", "faster_rcnn"])
-    p.add_argument("--weights", type=str, default="./src/detection/weights/yolo_best.pt", help="Path to weights")
+    p.add_argument("--weights", type=str, default="./src/optical_flow/tracking/detection/weights/yolo_best.pt", help="Path to weights")
     p.add_argument("--batch_size", type=int, default=32)
 
     # Data args
-    p.add_argument("-i", "--input_path", type=str, default="./data/AICity_data/train/S03/c010/vdo.avi")
-    p.add_argument("-o", "--output_path", type=str, default="./src/tracking/results/test_video.mp4")
+    p.add_argument("-i", "--input_path", type=str, default="./data/tracking/AICity_data/train/S03/c010/vdo.avi")
+    p.add_argument("-o", "--output_path", type=str, default="./src/optical_flow/tracking/results/test_video.mp4")
 
     # Detection filters
     p.add_argument("--min_confidence", type=float, default=0.3)
@@ -218,8 +159,9 @@ def parse_args():
     # Video
     p.add_argument("-s", "--save_video", action="store_true", help="Whether to save the output video with tracking.")
 
-    # Run experiments
-    p.add_argument("--sweep", action="store_true", help="Run all experiments and create plots.")
+    # Optical flow
+    p.add_argument("--use_flow", action="store_true", help="Use optical flow in the tracking.")
+    p.add_argument("--flow_alpha", type=float, default=0.5, help="0.5 mean between Kalman prediction and Optical Flow, 1.0 just Kalman.")
 
     return p.parse_args()
 
@@ -228,13 +170,8 @@ def main(args):
     # Run detection just once
     preds_by_frame, video_frames = detect_objects(args)
 
-    # Run multiple or single tracking experiments
-    if args.sweep:
-        print(f"Sweep over all experiments.")
-        sweep_and_plot(args, preds_by_frame, video_frames)
-    else:
-        print(f"Run one experiment.")
-        run_one_experiment(args, preds_by_frame, video_frames)
+    print(f"Run one experiment.")
+    run_one_experiment(args, preds_by_frame, video_frames)
 
 
 if __name__ == "__main__":

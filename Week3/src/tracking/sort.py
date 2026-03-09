@@ -5,7 +5,7 @@ import numpy as np
 from filterpy.kalman import KalmanFilter
 from scipy.optimize import linear_sum_assignment
 
-from src.tracking.tracking_utils import compute_iou_xyxy
+from src.optical_flow.tracking.tracking_utils import compute_iou_xyxy, predict_bbox_with_flow, blend_bboxes_xyxy
 
 
 def convert_bbox_to_z(bbox):
@@ -75,6 +75,11 @@ class KalmanBoxTracker(object):
         self.hits = 0
         self.hit_streak = 0
         self.age = 0
+        x1 = bbox[0]
+        y1 = bbox[1]
+        x2 = bbox[0] + bbox[2]
+        y2 = bbox[1] + bbox[3]
+        self.last_observed_bbox = np.array([x1, y1, x2, y2], dtype=np.float32)
 
     def update(self, bbox):
         self.time_since_update = 0
@@ -82,6 +87,12 @@ class KalmanBoxTracker(object):
         self.hits += 1
         self.hit_streak += 1
         self.kf.update(convert_bbox_to_z(bbox))
+
+        x1 = bbox[0]
+        y1 = bbox[1]
+        x2 = bbox[0] + bbox[2]
+        y2 = bbox[1] + bbox[3]
+        self.last_observed_bbox = np.array([x1, y1, x2, y2], dtype=np.float32)
 
     def predict(self):
         if (self.kf.x[6] + self.kf.x[2]) <= 0:
@@ -140,7 +151,11 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3, ma
     trackers:   Mx5 internal predicted boxes in [x1,y1,x2,y2,0] style used in original code
     """
     if len(trackers) == 0:
-        return np.empty((0, 2), dtype=int), np.arange(len(detections)), np.empty((0, 5), dtype=int)
+        return (
+            np.empty((0, 2), dtype=int),
+            np.arange(len(detections)),
+            np.empty((0,), dtype=int),
+        )
 
     iou_matrix = np.zeros((len(detections), len(trackers)), dtype=np.float32)
     for d, det in enumerate(detections):
@@ -205,7 +220,7 @@ class Sort(object):
         self.trackers = []
         self.frame_count = 0
 
-    def update(self, dets):
+    def update(self, dets, flow_uv=None, image_shape=None, use_flow=False, flow_alpha=0.5):
         """
         dets: Nx5 in format [x, y, w, h, score]
         Returns: Kx5 in format [x1, y1, x2, y2, track_id]
@@ -213,22 +228,36 @@ class Sort(object):
         self.frame_count += 1
 
         # predicted locations from existing trackers
-        trks = np.zeros((len(self.trackers), 5), dtype=np.float32)
+        match_trks = np.zeros((len(self.trackers), 5), dtype=np.float32)
         to_del = []
         ret = []
 
-        for t, trk in enumerate(trks):
-            pos = self.trackers[t].predict()[0]  # pos is [x1,y1,x2,y2]
-            trk[:] = [pos[0], pos[1], pos[2], pos[3], 0]
+        for t in range(len(self.trackers)):
+            pos = self.trackers[t].predict()[0]  # [x1,y1,x2,y2]
+
             if np.any(np.isnan(pos)):
                 to_del.append(t)
+                continue
 
-        trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
+            if use_flow and flow_uv is not None and image_shape is not None:
+                flow_box = predict_bbox_with_flow(
+                    flow_uv,
+                    self.trackers[t].last_observed_bbox,
+                    image_shape,
+                )
+                match_box = blend_bboxes_xyxy(pos, flow_box, alpha=flow_alpha)
+            else:
+                match_box = pos
+
+            match_trks[t, :] = [match_box[0], match_box[1], match_box[2], match_box[3], 0]
+
+        match_trks = np.ma.compress_rows(np.ma.masked_invalid(match_trks))
+
         for t in reversed(to_del):
             self.trackers.pop(t)
 
         matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(
-            dets, trks, iou_threshold=self.iou_threshold, matching=self.matching
+            dets, match_trks, iou_threshold=self.iou_threshold, matching=self.matching
         )
 
         # update matched trackers
