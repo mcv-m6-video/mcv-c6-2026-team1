@@ -23,7 +23,6 @@ def save_metrics_json(metrics, output_path, args):
 
     # Experiment name
     exp_name = (
-        f"det={args.detection_model}"
         f"_trk={args.tracking_model}"
         f"_match={args.matching}"
         f"_conf={args.min_confidence:.2f}"
@@ -38,9 +37,6 @@ def save_metrics_json(metrics, output_path, args):
         "summary": metrics["summary"],
         "raw": {k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in metrics["raw"].items()},
         "timestamp": datetime.now().isoformat(),
-        "detection_model": args.detection_model,
-        "weights": args.weights,
-        "batch_size": args.batch_size,
         "tracking_model": args.tracking_model,
         "matching": args.matching,
         "min_confidence": float(args.min_confidence),
