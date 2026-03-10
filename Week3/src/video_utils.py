@@ -7,7 +7,7 @@ import time
 from tqdm import tqdm
 from collections import defaultdict
 from src.detection.evaluation import load_gts, load_preds
-from src.eval import get_gt_data, get_sequence_dir
+from src.eval import get_gt_data, get_sequence_dir, loadroi
 
 DEFAULT_VIDEO_PATH = "data/AICity_data/train/S03/c010/vdo.avi"
 
@@ -192,11 +192,11 @@ def extract_video_AI_city(
     end_frame=-1,
 ):
     """
-    Extracts a video segment from the AI City Challenge dataset showing GTs. 
+    Extracts a video segment from the AI City Challenge dataset showing GTs and ROI.
     GTs are obtained dynamically based on the camera ID. If 'video_path' is not None, it overlays them for predictions.
-
     """
     gt_df = get_gt_data()
+    not_roi_mask = loadroi(cam_id) < 255
     
     # Process GTs for the specific camera
     gts = _get_bboxes_by_frame_ai_city(gt_df, cam_id)
@@ -228,6 +228,9 @@ def extract_video_AI_city(
         if not ret: 
             print("End of video stream reached.")
             break
+
+        # Darken pixels outside the ROI
+        frame[not_roi_mask] = frame[not_roi_mask] // 3
 
         # AI City Challenge frames are 1-indexed, but OpenCV frame_idx is 0-indexed.
         ai_city_frame_idx = frame_idx + 1

@@ -24,16 +24,6 @@ def get_gt_data():
 def get_sequence_dir(seq_id):
     return os.path.join(AI_CITY_DATA_DIR, f"S{seq_id:02d}")
 
-# Change: Get camera ROI image path
-def get_camera_roi_filepath(cid):
-    def get_camera_sequence():
-        if 1 <= cid <= 5: return 1
-        elif 10 <= cid <= 15: return 3
-        elif 16 <= cid <= 40: return 4
-        else: raise ValueError(f"{cid:03d} is not in any sequence!")
-        
-    return f"{AI_CITY_DATA_DIR}/S{get_camera_sequence():02d}/c{cid:03d}/roi.jpg"
-
 def get_args():
     parser = ArgumentParser(add_help=False, usage=usageMsg())
     parser.add_argument("data", help="Path to <predicted_labels>.")
@@ -164,6 +154,41 @@ def print_results(summary, mread=False):
     print("-" * 30)
     return
 
+# Change: Get ROI from custom path
+def loadroi(cid):
+    """Read the ROI image for a given camera.
+
+    Params
+    ------
+    cid : int
+        Camera ID whose ROI image should be retrieved.
+    Returns
+    -------
+    im : numpy.ndarray
+        Image stored as a 2-d ndarray.
+    """
+    def get_camera_roi_filepath(cid):
+        def get_camera_sequence():
+            if 1 <= cid <= 5: return 1
+            elif 10 <= cid <= 15: return 3
+            elif 16 <= cid <= 40: return 4
+            else: raise ValueError(f"{cid:03d} is not in any sequence!")
+            
+        return f"{AI_CITY_DATA_DIR}/S{get_camera_sequence():02d}/c{cid:03d}/roi.jpg"
+    
+    imf = get_camera_roi_filepath(cid)
+    if not os.path.exists(imf):
+        raise ValueError("Missing ROI image for camera %03d." % cid)
+    img = Image.open( imf, mode='r').convert('L')
+    img.load()
+    if img.size[0] > img.size[1]:
+        img = img.transpose(Image.TRANSPOSE)
+        
+    im = np.asarray( img, dtype="uint8" )
+    if im.shape[0] > im.shape[1]:
+        im = im.T
+
+    return im
 
 def eval(test, pred, cid=None):
     """ Evaluate submission.
@@ -204,34 +229,6 @@ def eval(test, pred, cid=None):
         df : pandas.dfFrame
             Filtered df with only objects within the ROI retained.
         """
-
-        def loadroi(cid):
-            """Read the ROI image for a given camera.
-        
-            Params
-            ------
-            cid : int
-                Camera ID whose ROI image should be retrieved.
-            Returns
-            -------
-            im : numpy.ndarray
-                Image stored as a 2-d ndarray.
-            """
-
-            # Change: Get ROI from custom path
-            imf = get_camera_roi_filepath(cid)
-            if not os.path.exists(imf):
-                raise ValueError("Missing ROI image for camera %03d." % cid)
-            img = Image.open( imf, mode='r').convert('L')
-            img.load()
-            if img.size[0] > img.size[1]:
-                img = img.transpose(Image.TRANSPOSE)
-                
-            im = np.asarray( img, dtype="uint8" )
-            if im.shape[0] > im.shape[1]:
-                im = im.T
-
-            return im
         
         def isROIOutlier(row, roi, height, width):
             """Check whether item stored in row is outside the region of interest.
