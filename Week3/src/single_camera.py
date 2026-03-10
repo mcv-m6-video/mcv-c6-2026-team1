@@ -1,18 +1,43 @@
 import os
 import glob
 import argparse
-from video_utils import load_video
+from pathlib import Path
+from src.video_utils import load_video
 from src.eval import readData, eval, get_sequence_dir, get_gt_data
+from src.detection.run_detection import build_model, run_detection
+from src.optical_flow.runner import build_flow_model
+from src.tracking.run_tracking import run_tracking
 
-PRED_FILENAME = "track1.txt"
+PRED_FILENAME = Path("track1.txt")
+DET_WEIGHTS = Path("./src/detection/weights/yolo_best.pt")
+RESULTS_DIR = Path("./results")
 
 def get_args():
     parser = argparse.ArgumentParser(description="Run single-camera tracking and evaluation on the CVPR 2022 AI City Challenge Track1 dataset.")
     parser.add_argument("seq_id", type=int, choices=[1,3,4], help="Sequence ID (choices: 1, 3, 4)")
     parser.add_argument("-e", "--execute", action="store_true", help="If set, run the tracking algorithm before evaluation.")
+
+    # Tracking and matching
+    parser.add_argument("-t", "--tracking_model", type=str, default="overlap", choices=["overlap", "kalman"])
+    parser.add_argument("-m", "--matching", type=str, default="greedy", choices=["greedy", "hungarian"])
+
+    # Detection filters
+    parser.add_argument("--min_confidence", type=float, default=0.3)
+
+    # Tracking params
+    parser.add_argument("--min_iou", type=float, default=0.4)
+    parser.add_argument("--max_age", type=int, default=1)
+
+    # Save video w/ tracking
+    parser.add_argument("-s", "--save_video", action="store_true", help="Whether to save the output video with the tracking.")
+
+    # Optical flow
+    parser.add_argument("--use_flow", action="store_true", help="Use optical flow in the tracking.")
+    parser.add_argument("-f", "--flow_method", type=str, default="memflow_kitti", choices=["memflow_kitti", "memflow_sintel", "gmflow", "pyflow"])
+    parser.add_argument("--flow_alpha", type=float, default=0.5, help="0.5 mean between Kalman prediction and Optical Flow, 1.0 just Kalman.")
     return parser.parse_args()
 
-def run_tracking(seq_id, result_dir):
+def run_tracking_single_cam(args, seq_id, result_dir):
     """
     Placeholder for the actual tracking inference.
     It reads cameras from the sequence path and generates predictions.
@@ -26,9 +51,15 @@ def run_tracking(seq_id, result_dir):
         print(f"No camera folders found in {seq_dir}.")
         return
     
-
     # TODO: CREATE DETECTION MODEL OR TRACKING HERE
-
+    flow_model, flow_cfg, device = build_flow_model(method=args.flow_method)
+    flow_model_dict = {
+        "method": args.flow_method,
+        "model": flow_model,
+        "cfg": flow_cfg,
+        "device": device
+    }
+    det_model = build_model(DET_WEIGHTS)
 
     # Process all the cameras for the sequence
     for cam_folder in cam_folders:
@@ -41,10 +72,18 @@ def run_tracking(seq_id, result_dir):
         video = load_video(os.path.join(cam_folder, "vdo.avi"))
 
         # TODO: Detect
+        preds_by_frame = run_detection(video, det_model, frame_idxs=None, batch_size=32)
 
-        # TODO: Optical flow + tracking
-
-        # TODO: Save results in AI City format to 'pred_file', though 'pred_dir' can be used to export videos for later visualization
+        # TODO: Optical flow + tracking (+ save to txt)
+        run_tracking(
+            args=args, 
+            preds_by_frame=preds_by_frame, 
+            video_frames=video, 
+            flow_model_dict=flow_model_dict, 
+            input_video_path=os.path.join(cam_folder, "vdo.avi"),
+            save_video_path=RESULTS_DIR / f"tracking_video_S{seq_id:02d}.mp4",
+            txt_path=pred_file, 
+            cam_id=1)
         
         print(f"Saved prediction to {pred_file}")
 
@@ -127,6 +166,6 @@ if __name__ == "__main__":
     result_dir = f"result/S{seq_id:02d}"
     
     if args.execute:
-        run_tracking(seq_id, result_dir)
+        run_tracking_single_cam(args, seq_id, result_dir)
     
     run_evaluation(seq_id, result_dir)

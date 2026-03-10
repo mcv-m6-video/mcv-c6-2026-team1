@@ -7,16 +7,17 @@ from pathlib import Path
 from src.video_utils import load_video
 from src.detection.run_detection import build_model, run_detection
 from src.tracking.trackers import track_video_overlap, track_video_sort
-from src.tracking.tracking_utils import save_tracking_result_txt
+from src.tracking.tracking_utils import save_tracking_result_txt, precompute_flows
 from src.tracking.evaluation.main import evaluate_tracking
+from src.optical_flow.runner import build_flow_model
 
 
 # JSON utils
-def save_metrics_json(metrics, args):
+def save_metrics_json(metrics, output_path, args):
     """
     Saves metrics dict nicely formatted to JSON.
     """
-    out_video_path = Path(args.output_path)
+    out_video_path = Path(output_path)
     metrics_dir = out_video_path.parent / "trk_metrics"
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
@@ -75,24 +76,21 @@ def load_run_json(path):
     }
 
 
-def detect_objects(args, frame_idxs=None):
-    # Load video
-    video_frames = load_video(args.input_path)
-
-    # Run detection in minibatches
-    det_model = build_model(args.weights)
-    preds_by_frame = run_detection(video_frames, det_model, frame_idxs=frame_idxs, batch_size=args.batch_size)
-
-    return preds_by_frame, video_frames
-
-
-def run_tracking(args, preds_by_frame, video_frames, txt_path=None, cam_id=None):
-    out_path = Path(args.output_path)
+def run_tracking(args, 
+                 preds_by_frame, 
+                 video_frames, 
+                 flow_model_dict,
+                 input_video_path,
+                 save_video_path,
+                 txt_path=None, 
+                 cam_id=None):
+    
+    out_path = Path(save_video_path)
 
     out = None
     if args.save_video:
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        cap = cv2.VideoCapture(args.input_path)
+        cap = cv2.VideoCapture(input_video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -100,6 +98,17 @@ def run_tracking(args, preds_by_frame, video_frames, txt_path=None, cam_id=None)
 
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         out = cv2.VideoWriter(str(out_path), fourcc, fps, (width, height))
+
+    flow_by_frame = None
+    if args.use_flow:
+        flow_by_frame = precompute_flows(
+            method=flow_model_dict["method"],
+            model=flow_model_dict["model"], 
+            cfg=flow_model_dict["cfg"], 
+            device=flow_model_dict["device"], 
+            video_frames=video_frames, 
+            flow_stride=2, 
+            scale=0.6)
 
     # Track
     if args.tracking_model == "overlap":
@@ -112,7 +121,7 @@ def run_tracking(args, preds_by_frame, video_frames, txt_path=None, cam_id=None)
             max_age=args.max_age,
             out=out,
             save_video=args.save_video,
-            use_flow=args.use_flow
+            flow_by_frame=flow_by_frame
         )
     else:
         pred = track_video_sort(
@@ -124,7 +133,7 @@ def run_tracking(args, preds_by_frame, video_frames, txt_path=None, cam_id=None)
             max_age=args.max_age,
             out=out,
             save_video=args.save_video,
-            use_flow=args.use_flow,
+            flow_by_frame=flow_by_frame,
             flow_alpha=args.flow_alpha
         )
 
@@ -132,7 +141,7 @@ def run_tracking(args, preds_by_frame, video_frames, txt_path=None, cam_id=None)
         save_tracking_result_txt(pred, txt_path, cam_id)
 
     metrics = evaluate_tracking(pred)
-    json_metrics, metrics_path = save_metrics_json(metrics, args)
+    json_metrics, metrics_path = save_metrics_json(metrics, save_video_path, args)
 
     return json_metrics, metrics_path
 
@@ -148,10 +157,6 @@ def parse_args():
     p.add_argument("-d", "--detection_model", type=str, default="yolo", choices=["yolo", "faster_rcnn"])
     p.add_argument("--weights", type=str, default="./src/detection/weights/yolo_best.pt", help="Path to weights")
     p.add_argument("--batch_size", type=int, default=32)
-
-    # Data args
-    p.add_argument("-i", "--input_path", type=str, default="./data/AICity_data/train/S03/c010/vdo.avi")
-    p.add_argument("-o", "--output_path", type=str, default="./results/test_video.mp4")
 
     # Detection filters
     p.add_argument("--min_confidence", type=float, default=0.3)
@@ -171,11 +176,32 @@ def parse_args():
 
 
 def main(args):
-    # Run detection just once
-    preds_by_frame, video_frames = detect_objects(args)
+    input_path="./data/AICity_data/train/S03/c010/vdo.avi"
+    output_path="./results/tracking_video.mp4"
+    video_frames = load_video(input_path)
+
+    print(f"Run detection.")
+    det_model = build_model(args.weights)
+    preds_by_frame = run_detection(video_frames, det_model, frame_idxs=None, batch_size=args.batch_size)
 
     print(f"Run tracking.")
-    run_tracking(args, preds_by_frame, video_frames, txt_path = "./test.txt", cam_id=1)
+    method = "memflow_kitti"
+    model, cfg, device = build_flow_model(method=method)
+    flow_model_dict = {
+        "method": method,
+        "model": model,
+        "cfg": cfg,
+        "device": device
+    }
+    run_tracking(
+        args, 
+        preds_by_frame, 
+        video_frames, 
+        flow_model_dict, 
+        input_video_path=input_path,
+        save_video_path=output_path,
+        txt_path="./test.txt", 
+        cam_id=1)
 
 
 if __name__ == "__main__":

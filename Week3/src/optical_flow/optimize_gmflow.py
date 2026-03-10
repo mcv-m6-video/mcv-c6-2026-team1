@@ -31,6 +31,8 @@ def objective(trial):
         method_params=params,
     )
 
+    trial.set_user_attr("time", info["time"])
+
     return msen, pepn
 
 
@@ -47,6 +49,7 @@ if __name__ == "__main__":
             "trial_number": t.number,
             "msen": t.values[0],
             "pepn": t.values[1],
+            "time": t.user_attrs["time"],
             "params": t.params,
         })
 

@@ -4,7 +4,7 @@ from tqdm import tqdm
 from collections import OrderedDict
 from typing import List, Dict, Any
 
-from src.optical_flow.runner import build_flow_model, run_sequence
+from src.optical_flow.runner import run_sequence
 
 
 # Tracking objects
@@ -265,9 +265,7 @@ def blend_bboxes_xyxy(box_a, box_b, alpha=0.5):
     return alpha * box_a + (1.0 - alpha) * box_b
 
 
-def precompute_flows(video_frames, method="memflow_t_sintel", method_params=None, flow_stride=1, scale=0.6):
-    model, cfg, device = build_flow_model(method=method)
-
+def precompute_flows(method, model, cfg, device, video_frames, method_params=None, flow_stride=1, scale=0.6):
     flow_by_frame = {0: None}
     last_flow = None
 

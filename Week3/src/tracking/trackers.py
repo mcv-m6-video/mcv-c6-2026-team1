@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from tqdm import tqdm
+from pathlib import Path
 
 from src.tracking.sort import Sort
 from src.tracking.tracking_utils import (
@@ -11,10 +12,12 @@ from src.tracking.tracking_utils import (
     draw_tracks_on_frame, 
     compute_iou_xyxy,
     xyxy_to_xywh,
-    predict_bbox_with_flow,
-    precompute_flows)
+    predict_bbox_with_flow)
 
-from src.optical_flow.runner import run_sequence
+from src.optical_flow.runner import save_flow_visualization
+
+FLOW_IMG_PATH = Path("./results/trk_flow_img")
+FLOW_IMG_PATH.mkdir(exist_ok=True)
 
 
 # Input is preds_by_frame of run_detection function
@@ -202,7 +205,7 @@ def track_video_overlap(
         max_age, 
         out=None, 
         save_video=False,
-        use_flow=False
+        flow_by_frame=None
 ):
     
     print(f"Running tracking with maximum overlap and {matching} matching.")
@@ -211,9 +214,12 @@ def track_video_overlap(
     next_track_id = 0
     result_frames = []
     
-    flow_by_frame = None
-    if use_flow:
-        flow_by_frame = precompute_flows(video_frames, method="memflow_t_sintel", flow_stride=2, scale=0.6)
+    use_flow=False
+    save_flow_frames = set()
+    if flow_by_frame is not None:
+        n = len(video_frames)
+        save_flow_frames = set(np.linspace(1, n - 1, 5, dtype=int))
+        use_flow=True
 
     tracker_fn = max_overlap_tracker if matching == "greedy" else hungarian_overlap_tracker
 
@@ -222,7 +228,10 @@ def track_video_overlap(
         pred = preds_by_frame.get(frame_idx, None)
         boxes, _, classes = filter_detections_for_frame(pred, min_confidence)
 
-        flow_uv = flow_by_frame[frame_idx] if use_flow else None
+        flow_uv = flow_by_frame[frame_idx] if flow_by_frame is not None else None
+        if use_flow and flow_uv is not None and frame_idx in save_flow_frames:
+            save_path = FLOW_IMG_PATH / f"flow_frame_{frame_idx:05d}.png"
+            save_flow_visualization(flow_uv, save_path)
 
         active_tracks, next_track_id = tracker_fn(
             predicted_boxes=boxes,
@@ -261,7 +270,7 @@ def track_video_sort(
         max_age, 
         out=None, 
         save_video=True,
-        use_flow=False,
+        flow_by_frame=None,
         flow_alpha=0.5):
     
     print(f"Running tracking with SORT and {matching} matching.")
@@ -270,9 +279,12 @@ def track_video_sort(
     tracks_by_id = {}
     result_frames = []
 
-    flow_by_frame = None
-    if use_flow:
-        flow_by_frame = precompute_flows(video_frames, method="memflow_t_sintel", flow_stride=2, scale=0.6)
+    use_flow=False
+    save_flow_frames = set()
+    if flow_by_frame is not None:
+        n = len(video_frames)
+        save_flow_frames = set(np.linspace(1, n - 1, 5, dtype=int))
+        use_flow=True
 
     for frame_idx, frame_rgb in tqdm(enumerate(video_frames), desc= "Computing track with Max Overlap"):
         frame = rgb_to_bgr(frame_rgb)
@@ -280,6 +292,9 @@ def track_video_sort(
         boxes_xyxy, scores, classes = filter_detections_for_frame(pred, min_confidence)
 
         flow_uv = flow_by_frame[frame_idx] if use_flow else None
+        if use_flow and flow_uv is not None and frame_idx in save_flow_frames:
+            save_path = FLOW_IMG_PATH / f"flow_frame_{frame_idx:05d}.png"
+            save_flow_visualization(flow_uv, save_path)
 
         unique_classes_in_frame = set(classes.tolist())
         all_classes_to_step = set(sort_by_class.keys()) | unique_classes_in_frame

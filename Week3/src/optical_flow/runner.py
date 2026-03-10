@@ -60,7 +60,7 @@ def _parse_memflow_method(method: str):
     return is_t, stage
 
 
-def build_flow_model(method="memflow_t_sintel", device=None):
+def build_flow_model(method="memflow_kitti", device=None):
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     
