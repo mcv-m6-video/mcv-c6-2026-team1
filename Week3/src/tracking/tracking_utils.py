@@ -86,7 +86,7 @@ def draw_track_trail(frame, track):
         pts.append([cx, cy])
 
     pts = np.array(pts, dtype=np.int32).reshape((-1, 1, 2))
-    cv2.polylines(frame, [pts], isClosed=False, color=(0, 255, 0), thickness=2)
+    cv2.polylines(frame, [pts], isClosed=False, color=(0, 0, 255), thickness=2)
 
 
 def compute_iou_xyxy(box0, box1):
