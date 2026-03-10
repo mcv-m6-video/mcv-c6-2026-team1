@@ -1,16 +1,14 @@
 import os
 import glob
 import argparse
-from pathlib import Path
 from src.video_utils import load_video
 from src.eval import readData, eval, get_sequence_dir, get_gt_data
-from src.detection.run_detection import build_model, run_detection
+from src.detection.run_detection import load_best_model, run_detection
 from src.optical_flow.runner import build_flow_model
 from src.tracking.run_tracking import run_tracking
 
-PRED_FILENAME = Path("track1.txt")
-DET_WEIGHTS = Path("./src/detection/weights/yolo_best.pt")
-RESULTS_DIR = Path("./results")
+PRED_FILENAME = "track1.txt"
+VIDEO_FILENAME = "tracking.mp4"
 
 def get_args():
     parser = argparse.ArgumentParser(description="Run single-camera tracking and evaluation on the CVPR 2022 AI City Challenge Track1 dataset.")
@@ -22,18 +20,18 @@ def get_args():
     parser.add_argument("-m", "--matching", type=str, default="greedy", choices=["greedy", "hungarian"])
 
     # Detection filters
-    parser.add_argument("--min_confidence", type=float, default=0.3)
+    parser.add_argument("--min_confidence", type=float, default=0.4)
 
     # Tracking params
     parser.add_argument("--min_iou", type=float, default=0.4)
-    parser.add_argument("--max_age", type=int, default=1)
+    parser.add_argument("--max_age", type=int, default=3)
 
     # Save video w/ tracking
     parser.add_argument("-s", "--save_video", action="store_true", help="Whether to save the output video with the tracking.")
 
     # Optical flow
-    parser.add_argument("--use_flow", action="store_true", help="Use optical flow in the tracking.")
-    parser.add_argument("-f", "--flow_method", type=str, default="memflow_kitti", choices=["memflow_kitti", "memflow_sintel", "gmflow", "pyflow"])
+    parser.add_argument("-f", "--use_flow", action="store_true", help="Use optical flow in the tracking.")
+    parser.add_argument("--flow_method", type=str, default="memflow_kitti", choices=["memflow_kitti", "memflow_sintel", "gmflow", "pyflow"])
     parser.add_argument("--flow_alpha", type=float, default=0.5, help="0.5 mean between Kalman prediction and Optical Flow, 1.0 just Kalman.")
     return parser.parse_args()
 
@@ -51,7 +49,8 @@ def run_tracking_single_cam(args, seq_id, result_dir):
         print(f"No camera folders found in {seq_dir}.")
         return
     
-    # TODO: CREATE DETECTION MODEL OR TRACKING HERE
+    # Detection and flow models
+    det_model = load_best_model()
     flow_model, flow_cfg, device = build_flow_model(method=args.flow_method)
     flow_model_dict = {
         "method": args.flow_method,
@@ -59,31 +58,33 @@ def run_tracking_single_cam(args, seq_id, result_dir):
         "cfg": flow_cfg,
         "device": device
     }
-    det_model = build_model(DET_WEIGHTS)
 
     # Process all the cameras for the sequence
     for cam_folder in cam_folders:
         cam_str = os.path.basename(cam_folder)
+        cid = int(cam_str[1:])
         pred_dir = os.path.join(result_dir, cam_str)
         os.makedirs(pred_dir, exist_ok=True)
+        video_file = os.path.join(pred_dir, VIDEO_FILENAME)
         pred_file = os.path.join(pred_dir, PRED_FILENAME)
         print(f"Processing camera {cam_str}...")
         
-        video = load_video(os.path.join(cam_folder, "vdo.avi"))
+        input_path = os.path.join(cam_folder, "vdo.avi")
+        video = load_video(input_path)
 
-        # TODO: Detect
-        preds_by_frame = run_detection(video, det_model, frame_idxs=None, batch_size=32)
+        # Predict bboxes
+        preds_by_frame = run_detection(video, det_model)
 
-        # TODO: Optical flow + tracking (+ save to txt)
+        # Tracking (w/ optical flow + save to .txt if applicable)
         run_tracking(
             args=args, 
             preds_by_frame=preds_by_frame, 
             video_frames=video, 
             flow_model_dict=flow_model_dict, 
-            input_video_path=os.path.join(cam_folder, "vdo.avi"),
-            save_video_path=RESULTS_DIR / f"tracking_video_S{seq_id:02d}.mp4",
+            input_video_path=input_path,
+            save_video_path=video_file,
             txt_path=pred_file, 
-            cam_id=1)
+            cam_id=cid)
         
         print(f"Saved prediction to {pred_file}")
 

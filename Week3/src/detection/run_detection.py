@@ -7,7 +7,7 @@ from src.detection.evaluation import get_valid_category_id, evaluate_from_preds
 import time
 
 def load_best_model(device = None):
-    return build_model("yolo", "src/detection/weights/yolo_best.pt", device)
+    return build_model("src/detection/weights/yolo_best.pt", device)
 
 def build_model(weights: Optional[str] = None, device = None):
     if device is None:
