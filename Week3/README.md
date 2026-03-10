@@ -21,54 +21,38 @@ Before running the code, the data directory must be configured:
 
 ⚠️ **IMPORTANT:** All scripts must be executed from `Week3/`.
 
-**TODO FROM HERE**
-
-Our code for this week is split in 2 modules (one for each task): `detection` and `tracking`. Therefore, there is a main entry point for each: `Week2/src/detection/run_detection.py` and `Week2/src/tracking/run_tracking.py`, respectively. The former handles car detection, whereas the latter targets tracking.
+Our code for this week includes the `optical_flow` module, but we focus on the entry point for running our inference and evaluation code for the 2022 CVPR AI City Challenge Track 1 (this week, though, in a Single-Camera Tracking context).
 
 ### Basic Execution
 
-To run the code (as Python modules) with default parameters:
+To run the code (as Python module) with default parameters for a specific sequence (choices: `[1, 3, 4]`):
 
 ```bash
-python -m src.detection.run_detection
-python -m src.detection.run_tracking
+python -m src.single_camera seq_id
 ```
 
 ### Command-Line Arguments
 
-Both scripts feature command-line customization. Please refer directly to the `parse_args()` function inside each script. Alternatively, you can run them with the `--help` flag to generate a complete list of all available parameters in your terminal:
+The main script is for evaluating a sequence when the predictions for its cameras have been already saved in the official challenge format. If you want to execute inference, use the `-e` flag. Please refer directly to the `parse_args()` function inside the script for more details on other arguments. Alternatively, you can run it with the `--help` flag to generate a complete list of all available parameters in your terminal:
 
 ```bash
-python -m src.detection.run_detection --help
-python -m src.detection.run_tracking --help
+python -m src.single_camera --help
 ```
 
 ## Directory Structure
 
 ```bash
-Week2/
+Week3/
 ├── README.md
 ├── data/
+│   ├── AI_CITY_CHALLENGE_2022_TRAIN/
 │   ├── AICity_data/
+│   ├── data_stereo_flow/
 │   └── ai_challenge_s03_c010-full_annotation.xml
 ├── src/
-│   ├── detection/
-│   │   ├── weights/
-│   │   │   └── yolo_best.pt                        # Best trained weights (strategy A)
-│   │   ├── cross_validate.py                       # Runs K-Fold cross-validation
-│   │   ├── evaluation.py                           # Utilities for detection evaluation
-│   │   ├── faster_rcnn.py                          # Faster R-CNN model definition
-│   │   ├── prepare_datasets.py                     # Prepare data according to both Strategy B and C
-│   │   ├── run_bayes_sweep.sh                      # Run Bayesian search for YOLO
-│   │   ├── run_detection.sh                        # Main entry point for detection inference
-│   │   ├── run_sweep.sh                            # Run grid search fine-tuning sweep
-│   │   ├── sweep_bayes_yolo.yaml                   # Configuration file for the Bayesian search for YOLO
-│   │   ├── sweep_faster_rcnn.yaml                  # Configuration file for training Faster R-CNN
-│   │   ├── sweep_yolo.yaml                         # Configuration file for training YOLO
-│   │   ├── train_faster_rcnn.py                    # Run to train Faster R-CNN
-│   │   ├── train_yolo.py                           # Run to train YOLO
-│   │   └── yolo.py                                 # YOLO model definition
-│   ├── tracking/
+│   ├── detection/                 # Detection code (Week 2)
+│   ├── tracking/                  # Tracking code (Week 2)
+│   ├── optical_flow/              # Optical flow code (TODO)
 │   │   ├── evaluation/
 │   │   │   ├── _base_metric.py                     # Base tracking metric class
 │   │   │   ├── _timing_.py                         # Tracks execution time performance
@@ -81,6 +65,8 @@ Week2/
 │   │   ├── sort.py                                 # SORT tracking algorithm implementation
 │   │   ├── trackers.py                             # Defines custom tracking classes
 │   │   └── tracking_utils.py                       # General object tracking helpers
-│   ├── video_utils.py                              # Video manipulation utilities
-└── └── view_video.ipynb                            # Notebook for video visualization
+│   ├── eval.py                     # Adapted official evaluation code
+│   ├── single_camera.py            # Main entry point of this week
+│   ├── video_utils.py              # Video manipulation utilities
+└── └── view_video.ipynb            # Notebook for video visualization
 ```

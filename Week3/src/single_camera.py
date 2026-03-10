@@ -10,7 +10,7 @@ from src.tracking.run_tracking import run_tracking
 PRED_FILENAME = "track1.txt"
 VIDEO_FILENAME = "tracking.mp4"
 
-def get_args():
+def parse_args():
     parser = argparse.ArgumentParser(description="Run single-camera tracking and evaluation on the CVPR 2022 AI City Challenge Track1 dataset.")
     parser.add_argument("seq_id", type=int, choices=[1,3,4], help="Sequence ID (choices: 1, 3, 4)")
     parser.add_argument("-e", "--execute", action="store_true", help="If set, run the tracking algorithm before evaluation.")
@@ -161,7 +161,7 @@ def run_evaluation(seq_id, result_dir):
 
 
 if __name__ == "__main__":
-    args = get_args()
+    args = parse_args()
     
     seq_id = args.seq_id
     result_dir = f"result/S{seq_id:02d}"
