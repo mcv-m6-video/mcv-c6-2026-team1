@@ -52,19 +52,15 @@ Week3/
 ├── src/
 │   ├── detection/                 # Detection code (Week 2)
 │   ├── tracking/                  # Tracking code (Week 2)
-│   ├── optical_flow/              # Optical flow code (TODO)
-│   │   ├── evaluation/
-│   │   │   ├── _base_metric.py                     # Base tracking metric class
-│   │   │   ├── _timing_.py                         # Tracks execution time performance
-│   │   │   ├── main.py                             # Evaluates tracking performance metrics
-│   │   │   ├── methods.py                          # Tracking metric calculation algorithms
-│   │   │   └── utils.py                            # Tracking evaluation helper functions
-│   │   ├── experiments.py                          # Runs multi-tracker experiment configurations
-│   │   ├── plotting.py                             # Generates tracking visualization graphs
-│   │   ├── run_tracking.py                         # Main entry point for tracking inference
-│   │   ├── sort.py                                 # SORT tracking algorithm implementation
-│   │   ├── trackers.py                             # Defines custom tracking classes
-│   │   └── tracking_utils.py                       # General object tracking helpers
+│   ├── optical_flow/              # Optical flow code (Week 3)
+│   │   ├── evaluation.py
+│   │   ├── gmflow_method.py
+│   │   ├── memflow_method.py
+│   │   ├── optimize_gmflow.py
+│   │   ├── optimize_memflow.py
+│   │   ├── optimize_pyflow.py
+│   │   ├── pyflow_method.py
+│   │   └── runner.py               # Run estimation on the KITTI dataset
 │   ├── eval.py                     # Adapted official evaluation code
 │   ├── single_camera.py            # Main entry point of this week
 │   ├── video_utils.py              # Video manipulation utilities
