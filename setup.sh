@@ -15,11 +15,11 @@ conda init --all
 conda create --name c6-team1 python==3.10.14 -y
 conda activate c6-team1
 
-# GCC compilers for Detectron2
-conda install -c conda-forge gcc_linux-64=11 gxx_linux-64=11 -y
-
 # Install FFmpeg
 conda install -c conda-forge ffmpeg -y
+
+# GCC compilers for Detectron2
+conda install -c conda-forge gcc_linux-64=11 gxx_linux-64=11 -y
 
 ## PyTorch installation
 
@@ -32,3 +32,29 @@ pip install git+https://github.com/facebookresearch/detectron2.git --no-build-is
 
 # Other packages are in the requirements.txt
 pip install -r requirements.txt
+
+## Setup Optical Flow models
+
+# Directory
+EXTERNAL_DIR="external"
+mkdir -p "$EXTERNAL_DIR"
+echo "Downloading pretrained models inside $EXTERNAL_DIR..."
+
+# GMFLow
+ZIP_PATH="$EXTERNAL_DIR/pretrained.zip"
+gdown --id "1d5C5cgHIxWGsFR1vYs5XrQbbUiZl9TX2" -O "$ZIP_PATH"
+unzip -o "$ZIP_PATH" -d "$EXTERNAL_DIR"
+rm "$ZIP_PATH"
+
+# MemFLow
+wget -O "$EXTERNAL_DIR/pretrained/MemFlowNet_kitti.pth" "https://github.com/DQiaole/MemFlow/releases/download/v1.0.0/MemFlowNet_kitti.pth"
+wget -O "$EXTERNAL_DIR/pretrained/MemFlowNet_T_kitti.pth" "https://github.com/DQiaole/MemFlow/releases/download/v1.0.0/MemFlowNet_T_kitti.pth"
+wget -O "$EXTERNAL_DIR/pretrained/MemFlowNet_sintel.pth" "https://github.com/DQiaole/MemFlow/releases/download/v1.0.0/MemFlowNet_sintel.pth"
+wget -O "$EXTERNAL_DIR/pretrained/MemFlowNet_T_sintel.pth" "https://github.com/DQiaole/MemFlow/releases/download/v1.0.0/MemFlowNet_T_sintel.pth"
+
+# PyFlow
+cd "$EXTERNAL_DIR/pyflow/"
+python setup.py build_ext --inplace
+cd ../..
+
+echo "Setup complete."

@@ -12,6 +12,9 @@ wandb/
 *.gif
 *.pkl
 *.png
+*.jpg
+*.csv
+*.pyc
 dataset/
 runs/
 logs/
