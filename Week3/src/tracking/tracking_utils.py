@@ -169,7 +169,7 @@ def tracking_result_to_lines(tracking_result, camera_id):
             obj_id = int(obj_id)
             xmin, ymin, width, height = xyxy_to_xywh_int(box)
 
-            line = f"{camera_id} {obj_id} {frame_id} {xmin} {ymin} {width} {height} -1 -1"
+            line = f"{camera_id} {obj_id} {frame_id+1} {xmin} {ymin} {width} {height} -1 -1"
             lines.append(line)
 
     return lines
