@@ -164,7 +164,7 @@ if __name__ == "__main__":
     args = parse_args()
     
     seq_id = args.seq_id
-    result_dir = f"result/S{seq_id:02d}"
+    result_dir = f"MTSC/S{seq_id:02d}"
     
     if args.execute:
         run_tracking_single_cam(args, seq_id, result_dir)
