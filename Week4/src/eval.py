@@ -18,11 +18,11 @@ from src.tracking.evaluation.methods import HOTA, Identity
 import json
 
 # Change: Custom data dir
-AI_CITY_DATA_DIR = "data/AI_CITY_CHALLENGE_2022_TRAIN/train"
+AI_CITY_DATA_DIR = "data/AI_CITY_CHALLENGE_2022_TRAIN"
 def get_gt_data():
     return readData("data/AI_CITY_CHALLENGE_2022_TRAIN/eval/ground_truth_train.txt")
 def get_sequence_dir(seq_id):
-    return os.path.join(AI_CITY_DATA_DIR, f"S{seq_id:02d}")
+    return os.path.join(AI_CITY_DATA_DIR, "train", f"S{seq_id:02d}")
 
 def get_args():
     parser = ArgumentParser(add_help=False, usage=usageMsg())
@@ -174,7 +174,7 @@ def loadroi(cid):
             elif 16 <= cid <= 40: return 4
             else: raise ValueError(f"{cid:03d} is not in any sequence!")
             
-        return f"{AI_CITY_DATA_DIR}/S{get_camera_sequence():02d}/c{cid:03d}/roi.jpg"
+        return f"{AI_CITY_DATA_DIR}/train/S{get_camera_sequence():02d}/c{cid:03d}/roi.jpg"
     
     imf = get_camera_roi_filepath(cid)
     if not os.path.exists(imf):
