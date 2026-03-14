@@ -7,3 +7,6 @@
 [submodule "external/memflow"]
 	path = external/memflow
 	url = https://github.com/DQiaole/MemFlow.git
+[submodule "external/TransReID"]
+	path = external/TransReID
+	url = https://github.com/damo-cv/TransReID.git
