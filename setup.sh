@@ -57,4 +57,7 @@ cd "$EXTERNAL_DIR/pyflow/"
 python setup.py build_ext --inplace
 cd ../..
 
+# ViT-base
+wget -O "$EXTERNAL_DIR/pretrained/jx_vit_base_p16_224-80ecf9dd.pth" "https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_p16_224-80ecf9dd.pth"
+
 echo "Setup complete."

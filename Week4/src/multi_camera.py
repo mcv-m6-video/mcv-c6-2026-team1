@@ -82,14 +82,14 @@ def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_f
         })
         
         # Initialize the tracklet package for the tracker
-        final_tracklets["obj_id"] = {
+        final_tracklets[obj_id] = {
             'cam_id': cam_id,
             'frame': best_det['frame'],
             'bbox': best_det['bbox']
         }
 
     # 2. Extract ReID features in a single video pass
-    video_path = os.path.join(get_sequence_dir(seq_id), "vdo.avi")
+    video_path = os.path.join(get_sequence_dir(seq_id), f"c{cam_id:03d}/vdo.avi")
     cap = init_video(video_path)
     current_frame = 1
     while cap.isOpened():
@@ -107,7 +107,10 @@ def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_f
                 
                 # Find and save features for the bounding box
                 crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-                features = reid_extractor.extract_features([crop_rgb])[0] # TODO: CHECK ORIOL
+                features = reid_extractor.extract_features(
+                    [crop_rgb],
+                    cam_ids=[cam_id],
+                )[0]
                 final_tracklets[req["obj_id"]]["features"] = features
                         
         current_frame += 1
@@ -123,6 +126,9 @@ def run_mtmc_reid(seq_id, result_dir):
     print(f"\n--- Starting MTMC ReID for Sequence S{seq_id:02d} ---")
     seq_dir = os.path.join(MTSC_DIR, f"S{seq_id:02d}")
     cam_folders = sorted(glob.glob(os.path.join(seq_dir, "c*")))
+    cam_ids_in_sequence = [int(os.path.basename(folder)[1:]) for folder in cam_folders]
+    camera_num = max(cam_ids_in_sequence) + 1 # embedding table must be large enough to index by the actual camera id.
+    view_num = 1
     if not cam_folders:
         print("No camera predictions found. Run 'single_camera.py' first.")
         return
@@ -130,7 +136,12 @@ def run_mtmc_reid(seq_id, result_dir):
     # Initialize modules
     projector = SpatioTemporalProjector(seq_id=seq_id)
     box_filter = BoxGrainedFilter()
-    reid_extractor = TransReID(config_path="...", model_weights_path="...") # TODO: CHECK ORIOL
+    reid_extractor = TransReID(
+        config_file="./configs/trans_reid_config.yaml",
+        model_weights_path="./models/transreid/best_model.pth",
+        camera_num=camera_num,
+        view_num=view_num,
+    )
     tracker = CityScaleTracker(projector, box_filter)
 
     # global_id_map: { cam_id: { local_obj_id: global_obj_id } }
