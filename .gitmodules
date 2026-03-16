@@ -9,4 +9,4 @@
 	url = https://github.com/DQiaole/MemFlow.git
 [submodule "external/TransReID"]
 	path = external/TransReID
-	url = https://github.com/damo-cv/TransReID.git
+	url = https://github.com/Diiego-H/TransReID.git
