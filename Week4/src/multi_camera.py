@@ -53,9 +53,10 @@ def parse_mtsc_predictions(txt_path, cam_id):
     return tracklets
 
 
-def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_filter):
+def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_filter, projector):
     """
     Finds the best frame for each tracklet and extracts the ReID features.
+    Stores full GPS trajectory and best-frame embedding.
     """
     # 1. Select the best frame representing each tracklet
     frames_to_extract = defaultdict(list)
@@ -65,27 +66,34 @@ def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_f
         # Sort by bounding box area to find the largest, clearest view
         detections.sort(key=lambda d: d['area'], reverse=True)
         
+        # TODO: TRY TOP-K MEAN EMBEDDINGS INSTEAD OF JUST THE BEST FRAME
         best_det = None
         for det in detections:
-            # TODO: CHECK IF THIS HELPS, IT SHOULD GIVE THE BEST CAMERA BBOX!
             if box_filter.is_trustworthy(det['bbox'], cam_id):
                 best_det = det
                 break
-                
-        # If no box passes the filter, just use the largest one
         if best_det is None:
             best_det = detections[0]
-            
+
         frames_to_extract[best_det['frame']].append({
             'obj_id': obj_id,
             'bbox': best_det['bbox']
         })
-        
-        # Initialize the tracklet package for the tracker
+
+        # Build tracklet trajectory
+        trajectory = []
+        for det in detections:
+            gps = projector.get_ground_plane_coord(cam_id, det['bbox'])
+            time = projector.get_global_time(cam_id, det['frame'])
+            trajectory.append({
+                'gps': gps,
+                'time': time,
+            })
+        trajectory = sorted(trajectory, key=lambda x: x['time'])
+
         final_tracklets[obj_id] = {
-            'cam_id': cam_id,
-            'frame': best_det['frame'],
-            'bbox': best_det['bbox']
+            'features': None,
+            'trajectory': trajectory
         }
 
     # 2. Extract ReID features in a single video pass
@@ -94,7 +102,9 @@ def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_f
     current_frame = 1
     while cap.isOpened():
         ret, frame_img = cap.read()
-        if not ret: break
+        if not ret:
+            break
+
         if current_frame in frames_to_extract:
             for req in frames_to_extract[current_frame]:
                 x1, y1, x2, y2 = map(int, req['bbox'])
@@ -104,15 +114,16 @@ def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_f
                 x1, y1 = max(0, x1), max(0, y1)
                 x2, y2 = min(w_img, x2), min(h_img, y2)
                 crop = frame_img[y1:y2, x1:x2]
-                
-                # Find and save features for the bounding box
+                if crop.size == 0:
+                    raise ValueError(f"Empty crop for obj_id {req['obj_id']} at frame {current_frame} in Camera {cam_id}!")
+
                 crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
                 features = reid_extractor.extract_features(
                     [crop_rgb],
                     cam_ids=[cam_id],
                 )[0]
                 final_tracklets[req["obj_id"]]["features"] = features
-                        
+
         current_frame += 1
 
     cap.release()
@@ -142,7 +153,7 @@ def run_mtmc_reid(seq_id, result_dir):
         camera_num=camera_num,
         view_num=view_num,
     )
-    tracker = CityScaleTracker(projector)
+    tracker = CityScaleTracker()
 
     # global_id_map: { cam_id: { local_obj_id: global_obj_id } }
     global_id_map = defaultdict(dict)
@@ -157,15 +168,15 @@ def run_mtmc_reid(seq_id, result_dir):
         
         print(f"Processing local tracks for Camera {cam_str}...")
         local_dict = parse_mtsc_predictions(txt_path, cam_id)
-        local_tracklets = build_camera_tracklets(seq_id, cam_id, local_dict, reid_extractor, box_filter)
-        
+        local_tracklets = build_camera_tracklets(seq_id, cam_id, local_dict, reid_extractor, box_filter, projector)
+
         if not global_tracklets:
             # First camera initializes the global registry
             for local_id, t in local_tracklets.items():
                 global_id_map[cam_id][local_id] = next_global_id
                 global_tracklets[next_global_id] = t
                 next_global_id += 1
-            
+
         else:
             # Match current camera against the established global registry
             matches = tracker.associate_tracks(global_tracklets, local_tracklets)
@@ -173,7 +184,11 @@ def run_mtmc_reid(seq_id, result_dir):
             for global_id, local_id in matches:
                 global_id_map[cam_id][local_id] = global_id
                 matched_local_ids.add(local_id)
-                
+                print(global_tracklets[global_id])
+                tracker.merge_tracks(global_tracklets[global_id], local_tracklets[local_id])
+                print(global_tracklets[global_id])
+                exit(0)
+
             # Assign new global IDs to unmatched vehicles in this camera
             for local_id, t in local_tracklets.items():
                 if local_id not in matched_local_ids:
@@ -182,6 +197,7 @@ def run_mtmc_reid(seq_id, result_dir):
                     next_global_id += 1
 
     # Rewrite tracks into a unified MTMC file
+    os.makedirs(result_dir, exist_ok=True)
     mtmc_output_file = os.path.join(result_dir, PRED_FILENAME)
     print(f"\nWriting globally consistent IDs to {mtmc_output_file}...")
     with open(mtmc_output_file, 'w') as f_out:
@@ -195,11 +211,11 @@ def run_mtmc_reid(seq_id, result_dir):
                     parts = line.strip().split()
                     if len(parts) < 7: continue
                     
-                    # Translate local ID to global ID (leave the same if not found) TODO: CHECK THIS IS NEEDED
-                    local_obj_id = int(parts[1])
-                    global_obj_id = global_id_map[cam_id].get(local_obj_id, local_obj_id)
+                    # Translate local ID to global ID
+                    local_id = int(parts[1])
+                    global_id = global_id_map[cam_id][local_id]
                     
-                    parts[1] = str(global_obj_id)
+                    parts[1] = str(global_id)
                     f_out.write(" ".join(parts) + "\n")
                     
     print("MTMC Association Complete.")
@@ -241,7 +257,7 @@ def run_evaluation(seq_id, result_dir):
             f.write(f"{'IDF1':<10} | {'HOTA':<10}\n")
             f.write("-" * 35)
             f.write(f"\n{idf1:>6.2f}%   | {hota:>6.2f}%\n")
-        print(f"\Evaluation saved to {file}")
+        print(f"Evaluation saved to {file}")
 
     else:
         print(f"Warning: Evaluation returned None.")
