@@ -8,9 +8,8 @@ from scipy.optimize import linear_sum_assignment
 # TODO: USE SPATIOTEMPORAL DISTANCE + VISUAL EMBEDDINGS JUST FOR A CHECK FOR THEM TO BE COMPATIBLE!
 
 class CityScaleTracker:
-    def __init__(self, projector, box_filter, max_threshold=0.6):
+    def __init__(self, projector, max_threshold=0.6):
         self.projector = projector
-        self.box_filter = box_filter
         self.max_threshold = max_threshold
 
     def _compute_distance_matrix(self, tracks_a, tracks_b):
@@ -46,9 +45,9 @@ class CityScaleTracker:
         st_cost = min(dist_pixels / 1000.0, 1.0) 
 
         # 2. Box-Grained Visual Calculation
-        valid_a = self.box_filter.is_trustworthy(track_a['bbox'])
-        valid_b = self.box_filter.is_trustworthy(track_b['bbox'])
-
+        # TODO: NOT DONE HERE! FILTER SHOULD BE GIVEN BEFORE!
+        valid_a = track_a['features'] is None
+        valid_b = track_b['features'] is None
         if valid_a and valid_b:
             # Trusts the TransReID feature entirely if both boxes are high quality
             visual_cost = cosine(track_a['features'], track_b['features'])

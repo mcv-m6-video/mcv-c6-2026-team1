@@ -44,6 +44,13 @@ class SpatioTemporalProjector:
         timestamp = _read_sequence_data(os.path.join(AI_CITY_DATA_DIR, "cam_timestamp", f"{seq_name}.txt"))
         assert len(framenum) == len(timestamp), f"Mismatch between number of cameras {len(framenum)} != {len(timestamp)})!"
 
+        # Get camera resolution
+        img_sizes = {}
+        for cam_id in framenum.keys():
+            roi = cv2.imread(os.path.join(AI_CITY_DATA_DIR, "train", seq_name, f"c{cam_id:03d}", "roi.jpg"))
+            h, w = roi.shape[:2]
+            img_sizes[cam_id] = {"height": h, "width": w}
+
         # Parse camera calibration
         calibrations = {}
         for cam_id in framenum.keys():
@@ -56,6 +63,7 @@ class SpatioTemporalProjector:
             fps[cam_id] = 8.0 if seq_id == 3 and cam_id == 15 else 10.0
 
         self.calibrations = calibrations
+        self.img_sizes = img_sizes
         self.fps = fps
         self.timestamp = timestamp
 
@@ -80,8 +88,8 @@ class SpatioTemporalProjector:
         return ground_coord
 
     def get_global_time(self, cam_id, frame_idx):
-        """Converts a local frame index (0-based!) to a global synchronized timestamp across the sequence."""
-        return self.timestamp[cam_id] + (frame_idx / self.fps[cam_id])
+        """Converts a local frame index (1-based!) to a global synchronized timestamp across the sequence."""
+        return self.timestamp[cam_id] + ((frame_idx-1) / self.fps[cam_id])
 
 if __name__ == "__main__":
 
@@ -107,6 +115,7 @@ if __name__ == "__main__":
     D = calib['D']
 
     print(f"Testing Camera {cam_str}.")
+    print(f"Resolution: {projector.img_sizes[cam_id]}")
     print(f"FPS: {projector.fps[cam_id]}")
     print(f"timestamp: {projector.timestamp[cam_id]}")
     print(f"Homography:\n{calib['H']}")

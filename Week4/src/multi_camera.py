@@ -67,8 +67,8 @@ def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_f
         
         best_det = None
         for det in detections:
-            # TODO: CHECK IF THIS HELPS!
-            if box_filter.is_trustworthy(det['bbox']):
+            # TODO: CHECK IF THIS HELPS, IT SHOULD GIVE THE BEST CAMERA BBOX!
+            if box_filter.is_trustworthy(det['bbox'], cam_id):
                 best_det = det
                 break
                 
@@ -135,14 +135,14 @@ def run_mtmc_reid(seq_id, result_dir):
 
     # Initialize modules
     projector = SpatioTemporalProjector(seq_id=seq_id)
-    box_filter = BoxGrainedFilter()
+    box_filter = BoxGrainedFilter(projector.img_sizes)
     reid_extractor = TransReID(
         config_file="./configs/trans_reid_config.yaml",
         model_weights_path="./models/transreid/best_model.pth",
         camera_num=camera_num,
         view_num=view_num,
     )
-    tracker = CityScaleTracker(projector, box_filter)
+    tracker = CityScaleTracker(projector)
 
     # global_id_map: { cam_id: { local_obj_id: global_obj_id } }
     global_id_map = defaultdict(dict)
