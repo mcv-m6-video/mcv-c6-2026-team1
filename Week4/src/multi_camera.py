@@ -4,7 +4,7 @@ import argparse
 from src.video_utils import init_video
 from src.eval import readData, eval, get_sequence_dir, get_gt_data
 
-from src.re_id.pipeline import CityScaleTracker
+from src.re_id.tracker import CityScaleTracker
 from src.re_id.trans_re_id import TransReID
 from src.re_id.projector import SpatioTemporalProjector
 from src.re_id.box_grained import BoxGrainedFilter
@@ -167,22 +167,18 @@ def run_mtmc_reid(seq_id, result_dir):
                 next_global_id += 1
             
         else:
-            # TODO: CHECK FROM HERE!
             # Match current camera against the established global registry
-            matches = tracker.associate_cameras(global_tracklets, local_tracklets)
+            matches = tracker.associate_tracks(global_tracklets, local_tracklets)
             matched_local_ids = set()
-            for global_t_id, local_t_id in matches:
-                # Find the actual global ID assigned to this global tracklet
-                g_id = next(t['global_id'] for t in global_tracklets if t['track_id'] == global_t_id)
-                global_id_map[cam_id][local_t_id] = g_id
-                matched_local_ids.add(local_t_id)
+            for global_id, local_id in matches:
+                global_id_map[cam_id][local_id] = global_id
+                matched_local_ids.add(local_id)
                 
             # Assign new global IDs to unmatched vehicles in this camera
-            for t in local_tracklets:
-                if t['track_id'] not in matched_local_ids:
-                    global_id_map[cam_id][t['track_id']] = next_global_id
-                    t['global_id'] = next_global_id
-                    global_tracklets.append(t)
+            for local_id, t in local_tracklets.items():
+                if local_id not in matched_local_ids:
+                    global_id_map[cam_id][local_id] = next_global_id
+                    global_tracklets[next_global_id] = t
                     next_global_id += 1
 
     # Rewrite tracks into a unified MTMC file

@@ -2,24 +2,24 @@ import numpy as np
 from scipy.spatial.distance import cosine
 from scipy.optimize import linear_sum_assignment
 
-# TODO: CHECK!
+# NOTE: THIS CAN WORK CORRECT, BUT IT WOULD BE BETTER TO ACCOUNT FOR ALL THE FRAMES FOR TRAJECTORY!
+#       THIS WOULD CORRECTLY IDENTIFY 2 CARS THAT ARE SIMILAR
+
+# TODO: USE SPATIOTEMPORAL DISTANCE + VISUAL EMBEDDINGS JUST FOR A CHECK FOR THEM TO BE COMPATIBLE!
+
 class CityScaleTracker:
-    def __init__(self, projector, box_filter, max_speed_kmh=120):
+    def __init__(self, projector, box_filter, max_threshold=0.6):
         self.projector = projector
         self.box_filter = box_filter
-        self.max_speed_ms = max_speed_kmh / 3.6
+        self.max_threshold = max_threshold
 
-    # NOTE: TRACKS ARE NOT DICTS, NOT LISTS!
-    def compute_distance_matrix(self, tracks_cam_a, tracks_cam_b):
-        """Creates a cost matrix between tracklets from two different cameras."""
-        num_a = len(tracks_cam_a)
-        num_b = len(tracks_cam_b)
-        cost_matrix = np.full((num_a, num_b), float('inf'))
-
-        for i, track_a in enumerate(tracks_cam_a):
-            for j, track_b in enumerate(tracks_cam_b):
+    def _compute_distance_matrix(self, tracks_a, tracks_b):
+        """Creates a cost matrix between tracklets."""
+        cost_matrix = np.full((len(tracks_a), len(tracks_b)), float('inf'))
+        for i, track_a in enumerate(tracks_a.values()):
+            for j, track_b in enumerate(tracks_b.values()):
                 cost_matrix[i, j] = self._calculate_pairwise_cost(track_a, track_b)
-                
+
         return cost_matrix
 
     def _calculate_pairwise_cost(self, track_a, track_b):
@@ -30,20 +30,20 @@ class CityScaleTracker:
         time_a = self.projector.get_global_time(track_a['cam_id'], track_a['frame'])
         time_b = self.projector.get_global_time(track_b['cam_id'], track_b['frame'])
         
-        dist_meters = np.linalg.norm(gps_a - gps_b)
+        dist_pixels = np.linalg.norm(gps_a - gps_b)
         time_diff = abs(time_a - time_b)
 
         # Filters impossible physical movements
         if time_diff > 0:
-            speed = dist_meters / time_diff
-            if speed > self.max_speed_ms:
-                return float('inf')
+            speed = dist_pixels / time_diff
+
+            # TODO: INCLUDE ALL THE FRAME INFORMATION!
         else:
-            if dist_meters > 5.0: # Prevents a vehicle from occupying two places at once
+            if dist_pixels > 5.0: # Prevents a vehicle from occupying two places at once
                 return float('inf')
 
         # Normalizes the spatio-temporal distance (maps meters to a 0.0 - 1.0 scale)
-        st_cost = min(dist_meters / 1000.0, 1.0) 
+        st_cost = min(dist_pixels / 1000.0, 1.0) 
 
         # 2. Box-Grained Visual Calculation
         valid_a = self.box_filter.is_trustworthy(track_a['bbox'])
@@ -51,7 +51,7 @@ class CityScaleTracker:
 
         if valid_a and valid_b:
             # Trusts the TransReID feature entirely if both boxes are high quality
-            visual_cost = cosine(track_a['feature'], track_b['feature'])
+            visual_cost = cosine(track_a['features'], track_b['features'])
             final_cost = (0.7 * visual_cost) + (0.3 * st_cost)
         else:
             # Discards the visual feature and relies on physics if truncation occurs
@@ -59,18 +59,22 @@ class CityScaleTracker:
             
         return final_cost
 
-    def associate_cameras(self, tracks_cam_a, tracks_cam_b):
-        """Uses the Hungarian algorithm to assign identical track IDs between cameras."""
-        cost_matrix = self.compute_distance_matrix(tracks_cam_a, tracks_cam_b)
+    def associate_tracks(self, global_tracks, local_tracks):
+        """Uses the Hungarian algorithm to associate global to local tracks."""
+        cost_matrix = self._compute_distance_matrix(global_tracks, local_tracks)
         
         # Replaces infinite values with a high constant for the assignment solver
         solve_matrix = np.where(np.isinf(cost_matrix), 1e5, cost_matrix)
         
+        # Match IDs using 
         row_ind, col_ind = linear_sum_assignment(solve_matrix)
-        
+
+        global_ids = list(global_tracks.keys())
+        local_ids = list(local_tracks.keys())
+
         matches = []
         for r, c in zip(row_ind, col_ind):
-            if cost_matrix[r, c] != float('inf'):
-                matches.append((tracks_cam_a[r]['track_id'], tracks_cam_b[c]['track_id']))
+            if cost_matrix[r, c] <= self.max_threshold:
+                matches.append((global_ids[r], local_ids[c]))
                 
         return matches
