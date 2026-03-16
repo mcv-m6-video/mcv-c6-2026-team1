@@ -62,6 +62,6 @@ wget -O "$EXTERNAL_DIR/pretrained/jx_vit_base_p16_224-80ecf9dd.pth" "https://git
 
 # TransReID trained best model
 mkdir -p "Week4/models/transreid"
-gdown 1qSp5rlRYOcSyAxWr7ty7I2B1p3tzYaRG -O Week4/models/transreid/best_model.pth
+gdown 1cJDCcpdUs1cOn2FU9MpHg9jyKC-LKnst -O Week4/models/transreid/best_model.pth
 
 echo "Setup complete."
