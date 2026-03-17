@@ -3,7 +3,7 @@ from scipy.spatial.distance import euclidean
 from scipy.optimize import linear_sum_assignment
 
 class CityScaleTracker:
-    def __init__(self, visual_only=False, visual_threshold=0.2, spatial_threshold=float("inf")):
+    def __init__(self, visual_only=False, visual_threshold=0.7, spatial_threshold=float("inf")):
         self.visual_only = visual_only
         self.visual_threshold = visual_threshold
         self.spatial_threshold = spatial_threshold
@@ -42,24 +42,20 @@ class CityScaleTracker:
 
                 # Get mean L2 norm
                 dist = float(np.mean(np.linalg.norm(sync_coords_a - sync_coords_b, axis=1)))
+
+                # Apply distance threshold. Account for similar vehicles
+                return float("inf") if dist > self.spatial_threshold else dist
             
             else:
-                # No time overlap: estimate closest distance
+                # No time overlap: verify by maximum velocity
                 min_dt_idx = np.argmin(dt_matrix)
                 i, j = np.unravel_index(min_dt_idx, dt_matrix.shape)
 
-                # Predict where Track B (local) would be at the closest instant for Track A
-                velocity = (coords_b[-1] - coords_b[0]) / (times_b[-1] - times_b[0])
-                if times_a[i] < times_b[j]:
-                    velocity *= -1 # Backward displacement
-                predicted_b = coords_b[j] + velocity * dt_matrix[i,j]
+                speed = np.linalg.norm(coords_a[i] - coords_b[j]) / dt_matrix[i, j]
+                max_speed_b = np.max(np.linalg.norm(coords_b[1:] - coords_b[:-1], axis=1) / np.diff(times_b))
 
-                # Get distance between closest Track A coordinate and the predicted for Track B
-                dist = float(np.linalg.norm(coords_a[i] - predicted_b))
-
-            # Apply distance threshold. Account for similar vehicles
-            return float("inf") if dist > self.spatial_threshold else dist
-        
+                # Apply speed threshold. Account for similar vehicles and GPS noise
+                return float("inf") if speed > 2*max_speed_b else speed # Allow for double speed
 
         cost_matrix = np.full((len(tracks_a), len(tracks_b)), float('inf'))
         for i, track_a in enumerate(tracks_a.values()):

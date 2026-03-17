@@ -361,6 +361,7 @@ def eval(test, pred, cid=None):
 
     # Change: Filter tracks that appear in only one camera (only for Multi-Camera Tracking)
     if cid is None:
+        test = removeOutliersSingleCam(test)
         pred = removeOutliersSingleCam(pred)
 
     pred = removeRepetition(pred)

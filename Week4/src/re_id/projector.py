@@ -28,7 +28,9 @@ class SpatioTemporalProjector:
             
             for line in calib_string.strip().split('\n'):
                 if line.startswith(H_PREFIX):
-                    calib_data['H'] = np.array([[float(x) for x in row.split()] for row in line[len(H_PREFIX):].split(";")])
+                    gps2img = np.array([[float(x) for x in row.split()] for row in line[len(H_PREFIX):].split(";")])
+                    _, img2gps = cv2.invert(gps2img)
+                    calib_data['H'] = img2gps
                 elif line.startswith(K_PREFIX):
                     calib_data['K'] = np.array([[float(x) for x in row.split()] for row in line[len(K_PREFIX):].split(";")])
                 elif line.startswith(D_PREFIX):
