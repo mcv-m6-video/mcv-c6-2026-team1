@@ -3,16 +3,15 @@ from scipy.spatial.distance import cosine
 from scipy.optimize import linear_sum_assignment
 
 class CityScaleTracker:
-    def __init__(self, visual_threshold=0.2, distance_threshold=35.0, speed_threshold=50.0):
+    def __init__(self, visual_threshold=0.2, distance_threshold=35.0):
         self.visual_threshold = visual_threshold
         self.distance_threshold = distance_threshold
-        self.speed_threshold = speed_threshold
 
     def _compute_distance_matrix(self, tracks_a, tracks_b):
         """Creates a cost matrix between tracklets."""
 
         def _calculate_track_cost(track_a, track_b):
-            # Filter match depending on visual similarity
+            # Filter tracks depending on their visual similarity
             visual_dist = cosine(track_a["features"], track_b["features"])
             if visual_dist > self.visual_threshold:
                 return float("inf")
@@ -24,36 +23,38 @@ class CityScaleTracker:
             
             times_a, coords_a = _extract_trajectory(track_a)
             times_b, coords_b = _extract_trajectory(track_b)
-
-            # Find registered instants synchronized by at least 0.5s
             dt_matrix = np.abs(times_a[:, np.newaxis] - times_b[np.newaxis, :])
             closest_b_indices = np.argmin(dt_matrix, axis=1)
             sync_mask = np.min(dt_matrix, axis=1) <= 0.5
+
             if np.any(sync_mask):
-                # Isolate valid pairs
+                # Tracks are synchronized by at least 0.5s
                 valid_a_indices = np.where(sync_mask)[0]
                 valid_b_indices = closest_b_indices[sync_mask]
 
-                # Get GPS coordinates
+                # Get synchronized GPS coordinates
                 sync_coords_a = coords_a[valid_a_indices]
                 sync_coords_b = coords_b[valid_b_indices]
 
-                # Get mean L2 norm for synchronized pairs
+                # Get mean L2 norm
                 dist = float(np.mean(np.linalg.norm(sync_coords_a - sync_coords_b, axis=1)))
+            
+            else:
+                # No time overlap: estimate closest distance
+                min_dt_idx = np.argmin(dt_matrix)
+                i, j = np.unravel_index(min_dt_idx, dt_matrix.shape)
 
-                # Apply distance threshold. Account for similar vehicles
-                return float("inf") if dist > self.distance_threshold else dist
+                # Predict where Track B (local) would be at the closest instant for Track A
+                velocity = (coords_b[-1] - coords_b[0]) / (times_b[-1] - times_b[0])
+                if times_a[i] < times_b[j]:
+                    velocity *= -1 # Backward displacement
+                predicted_b = coords_b[j] + velocity * dt_matrix[i,j]
 
-            # No time overlap: find closest pair of frames (in time)
-            min_dt_idx = np.argmin(dt_matrix)
-            i, j = np.unravel_index(min_dt_idx, dt_matrix.shape)
+                # Get distance between closest Track A coordinate and the predicted for Track B
+                dist = float(np.linalg.norm(coords_a[i] - predicted_b))
 
-            # Compute speed needed to cross the shortest temporal gap
-            dist = np.linalg.norm(coords_a[i] - coords_b[j])
-            speed = dist / dt_matrix[i, j]
-
-            # Speed filtering. Account for similar vehicles
-            return float("inf") if speed > self.speed_threshold else dist
+            # Apply distance threshold. Account for similar vehicles
+            return float("inf") if dist > self.distance_threshold else dist
         
 
         cost_matrix = np.full((len(tracks_a), len(tracks_b)), float('inf'))
