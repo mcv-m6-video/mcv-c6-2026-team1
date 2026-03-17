@@ -2,7 +2,7 @@ class BoxGrainedFilter:
     """
     Evaluates whether the visual ReID feature is trustworthy based on bbox quality.
     """
-    def __init__(self, img_sizes, min_area=3000, edge_margin=20):
+    def __init__(self, img_sizes, min_area=1000, edge_margin=20):
         self.img_sizes = img_sizes
         self.min_area = min_area
         self.edge_margin = edge_margin

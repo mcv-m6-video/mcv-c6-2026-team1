@@ -11,11 +11,13 @@ from src.re_id.tracker import CityScaleTracker
 from src.re_id.trans_re_id import TransReID
 from src.re_id.projector import SpatioTemporalProjector
 from src.re_id.box_grained import BoxGrainedFilter
+import io
+from contextlib import redirect_stdout
 
 MTSC_DIR = "MTSC"
 MTMC_DIR = "MTMC"
 PRED_FILENAME = "track1.txt"
-VIS_THR = 0.2
+VIS_THR = 0.7
 SPA_THR = 10.0
 
 def parse_args():
@@ -25,7 +27,7 @@ def parse_args():
 
     reid_group = parser.add_argument_group("MTMC ReID Arguments")
     reid_group.add_argument("-v", "--visual_only", action="store_true", help="If set, rely only on visual features for ReID (-e must be set).")
-    reid_group.add_argument("--visual_thr", type=float, default=VIS_THR, help=f"Maximum cosine distance allowed for a valid visual match (default: {VIS_THR}).")
+    reid_group.add_argument("--visual_thr", type=float, default=VIS_THR, help=f"Maximum Euclidean distance allowed for a valid visual match (default: {VIS_THR}).")
     reid_group.add_argument("--spatial_thr", type=float, default=SPA_THR, help=f"Maximum physical distance allowed for a valid spatial match (default: {SPA_THR}).")
 
     return parser.parse_args()
@@ -159,12 +161,13 @@ def run_mtmc_reid(seq_id, result_dir, **tracker_config):
     # Initialize modules
     projector = SpatioTemporalProjector(seq_id=seq_id)
     box_filter = BoxGrainedFilter(projector.img_sizes)
-    reid_extractor = TransReID(
-        config_file="./configs/trans_reid_config.yaml",
-        model_weights_path="./models/transreid/best_model.pth",
-        camera_num=camera_num,
-        view_num=view_num,
-    )
+    with redirect_stdout(io.StringIO()): # Avoid verbose model loading prints
+        reid_extractor = TransReID(
+            config_file="./configs/trans_reid_config.yaml",
+            model_weights_path="./models/transreid/best_model.pth",
+            camera_num=camera_num,
+            view_num=view_num,
+        )
     tracker = CityScaleTracker(**tracker_config)
 
     # global_id_map: { cam_id: { local_obj_id: global_obj_id } }
@@ -219,7 +222,7 @@ def run_mtmc_reid(seq_id, result_dir, **tracker_config):
                     parts = line.strip().split()
                     if len(parts) < 7: continue
                     
-                    # Translate local ID to global ID and overwrite
+                    # Translate local ID to global ID and write to result file
                     local_id = int(parts[1])
                     if local_id in global_id_map[cam_id]:
                         global_id = global_id_map[cam_id][local_id]

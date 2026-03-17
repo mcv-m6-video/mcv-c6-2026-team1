@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.spatial.distance import cosine
+from scipy.spatial.distance import euclidean
 from scipy.optimize import linear_sum_assignment
 
 class CityScaleTracker:
@@ -13,7 +13,7 @@ class CityScaleTracker:
 
         def _calculate_track_cost(track_a, track_b):
             # Filter tracks depending on their visual similarity
-            visual_dist = cosine(track_a["features"], track_b["features"])
+            visual_dist = euclidean(track_a["features"], track_b["features"])
             if visual_dist > self.visual_threshold:
                 return float("inf")
             
@@ -90,6 +90,7 @@ class CityScaleTracker:
         # Merge features accounting for amount of merges
         n_cams = global_track["n_cams"]
         merged["n_cams"] = n_cams + 1
-        merged["features"] = (global_track["features"]*n_cams + local_track["features"]) / merged["n_cams"]
+        mean_features = (global_track["features"]*n_cams + local_track["features"]) / merged["n_cams"]
+        merged["features"] = mean_features / np.linalg.norm(mean_features) # Re-normalize after merging
         
         return merged
