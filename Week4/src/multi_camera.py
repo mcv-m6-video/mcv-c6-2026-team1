@@ -1,6 +1,8 @@
 import os
 import glob
 import argparse
+import cv2
+from collections import defaultdict
 from src.video_utils import init_video
 from src.eval import readData, eval, get_sequence_dir, get_gt_data
 
@@ -18,12 +20,6 @@ def parse_args():
     parser.add_argument("seq_id", type=int, choices=[1,3,4], help="Sequence ID (choices: 1, 3, 4)")
     parser.add_argument("-e", "--execute", action="store_true", help="If set, run multi-camera ReID before evaluation.")
     return parser.parse_args()
-
-import os
-import glob
-import cv2
-import numpy as np
-from collections import defaultdict
 
 def parse_mtsc_predictions(txt_path, cam_id):
     """
@@ -92,6 +88,7 @@ def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_f
         trajectory = sorted(trajectory, key=lambda x: x['time'])
 
         final_tracklets[obj_id] = {
+            'n_cams': 1,
             'features': None,
             'trajectory': trajectory
         }
