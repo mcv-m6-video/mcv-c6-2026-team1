@@ -59,6 +59,10 @@ def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_f
     final_tracklets = {}
     
     for obj_id, detections in tracklets_dict.items():
+        # Filter 1-frame outliers
+        if len(detections) == 1:
+            continue
+        
         # Sort by bounding box area to find the largest, clearest view
         detections.sort(key=lambda d: d['area'], reverse=True)
         
