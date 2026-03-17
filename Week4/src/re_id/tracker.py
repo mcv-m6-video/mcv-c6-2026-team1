@@ -3,9 +3,10 @@ from scipy.spatial.distance import cosine
 from scipy.optimize import linear_sum_assignment
 
 class CityScaleTracker:
-    def __init__(self, visual_threshold=0.2, distance_threshold=35.0):
+    def __init__(self, visual_only=False, visual_threshold=0.2, spatial_threshold=float("inf")):
+        self.visual_only = visual_only
         self.visual_threshold = visual_threshold
-        self.distance_threshold = distance_threshold
+        self.spatial_threshold = spatial_threshold
 
     def _compute_distance_matrix(self, tracks_a, tracks_b):
         """Creates a cost matrix between tracklets."""
@@ -15,6 +16,9 @@ class CityScaleTracker:
             visual_dist = cosine(track_a["features"], track_b["features"])
             if visual_dist > self.visual_threshold:
                 return float("inf")
+            
+            if self.visual_only:
+                return visual_dist
 
             def _extract_trajectory(track):
                 times = np.array([p["time"] for p in track["trajectory"]])
@@ -54,7 +58,7 @@ class CityScaleTracker:
                 dist = float(np.linalg.norm(coords_a[i] - predicted_b))
 
             # Apply distance threshold. Account for similar vehicles
-            return float("inf") if dist > self.distance_threshold else dist
+            return float("inf") if dist > self.spatial_threshold else dist
         
 
         cost_matrix = np.full((len(tracks_a), len(tracks_b)), float('inf'))

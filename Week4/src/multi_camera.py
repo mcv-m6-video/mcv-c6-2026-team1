@@ -5,7 +5,8 @@ import cv2
 from collections import defaultdict
 from src.video_utils import init_video
 from src.eval import readData, eval, get_sequence_dir, get_gt_data
-
+from tqdm import tqdm
+import time
 from src.re_id.tracker import CityScaleTracker
 from src.re_id.trans_re_id import TransReID
 from src.re_id.projector import SpatioTemporalProjector
@@ -14,11 +15,19 @@ from src.re_id.box_grained import BoxGrainedFilter
 MTSC_DIR = "MTSC"
 MTMC_DIR = "MTMC"
 PRED_FILENAME = "track1.txt"
+VIS_THR = 0.2
+SPA_THR = 10.0
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run multi-camera ReID and evaluation for the CVPR 2022 AI City Challenge Track1 dataset.")
     parser.add_argument("seq_id", type=int, choices=[1,3,4], help="Sequence ID (choices: 1, 3, 4)")
     parser.add_argument("-e", "--execute", action="store_true", help="If set, run multi-camera ReID before evaluation.")
+
+    reid_group = parser.add_argument_group("MTMC ReID Arguments")
+    reid_group.add_argument("-v", "--visual_only", action="store_true", help="If set, rely only on visual features for ReID (-e must be set).")
+    reid_group.add_argument("--visual_thr", type=float, default=VIS_THR, help=f"Maximum cosine distance allowed for a valid visual match (default: {VIS_THR}).")
+    reid_group.add_argument("--spatial_thr", type=float, default=SPA_THR, help=f"Maximum physical distance allowed for a valid spatial match (default: {SPA_THR}).")
+
     return parser.parse_args()
 
 def parse_mtsc_predictions(txt_path, cam_id):
@@ -62,7 +71,7 @@ def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_f
         # Filter 1-frame outliers
         if len(detections) == 1:
             continue
-        
+
         # Sort by bounding box area to find the largest, clearest view
         detections.sort(key=lambda d: d['area'], reverse=True)
         
@@ -131,11 +140,13 @@ def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_f
     return final_tracklets
 
 
-def run_mtmc_reid(seq_id, result_dir):
+def run_mtmc_reid(seq_id, result_dir, **tracker_config):
     """
     Executes the global MTMC ReID across all cameras in a sequence.
     """
     print(f"\n--- Starting MTMC ReID for Sequence S{seq_id:02d} ---")
+    print("Tracker config:", tracker_config)
+    start = time.time()
     seq_dir = os.path.join(MTSC_DIR, f"S{seq_id:02d}")
     cam_folders = sorted(glob.glob(os.path.join(seq_dir, "c*")))
     cam_ids_in_sequence = [int(os.path.basename(folder)[1:]) for folder in cam_folders]
@@ -154,7 +165,7 @@ def run_mtmc_reid(seq_id, result_dir):
         camera_num=camera_num,
         view_num=view_num,
     )
-    tracker = CityScaleTracker()
+    tracker = CityScaleTracker(**tracker_config)
 
     # global_id_map: { cam_id: { local_obj_id: global_obj_id } }
     global_id_map = defaultdict(dict)
@@ -162,12 +173,11 @@ def run_mtmc_reid(seq_id, result_dir):
     next_global_id = 1
 
     # Sequentially match cameras to the global track registry
-    for cam_folder in cam_folders:
+    for cam_folder in tqdm(cam_folders, desc=f"Processing camera tracks..."):
         cam_str = os.path.basename(cam_folder)
         cam_id = int(cam_str[1:])
         txt_path = os.path.join(cam_folder, PRED_FILENAME)
         
-        print(f"Processing local tracks for Camera {cam_str}...")
         local_dict = parse_mtsc_predictions(txt_path, cam_id)
         local_tracklets = build_camera_tracklets(seq_id, cam_id, local_dict, reid_extractor, box_filter, projector)
 
@@ -185,10 +195,7 @@ def run_mtmc_reid(seq_id, result_dir):
             for global_id, local_id in matches:
                 global_id_map[cam_id][local_id] = global_id
                 matched_local_ids.add(local_id)
-                print(global_tracklets[global_id])
-                tracker.merge_tracks(global_tracklets[global_id], local_tracklets[local_id])
-                print(global_tracklets[global_id])
-                exit(0)
+                global_tracklets[global_id] = tracker.merge_tracks(global_tracklets[global_id], local_tracklets[local_id])
 
             # Assign new global IDs to unmatched vehicles in this camera
             for local_id, t in local_tracklets.items():
@@ -212,21 +219,22 @@ def run_mtmc_reid(seq_id, result_dir):
                     parts = line.strip().split()
                     if len(parts) < 7: continue
                     
-                    # Translate local ID to global ID
+                    # Translate local ID to global ID and overwrite
                     local_id = int(parts[1])
-                    global_id = global_id_map[cam_id][local_id]
+                    if local_id in global_id_map[cam_id]:
+                        global_id = global_id_map[cam_id][local_id]
+                        parts[1] = str(global_id)
+                        f_out.write(" ".join(parts) + "\n")
                     
-                    parts[1] = str(global_id)
-                    f_out.write(" ".join(parts) + "\n")
-                    
-    print("MTMC Association Complete.")
+    end = time.time()
+    print(f"MTMC Association Complete ({((end - start) / 60):2f} minutes).")
 
 
 def run_evaluation(seq_id, result_dir):
     """
     Evaluates predictions by directly importing and calling the eval logic.
     """
-    print(f"--- Running Tracking Evaluation for S{seq_id:02d} ---")
+    print(f"\n--- Running Tracking Evaluation for S{seq_id:02d} ---")
     if not os.path.exists(result_dir):
         print(f"Directory {result_dir} does not exist. Run with -e first.")
         return
@@ -271,6 +279,11 @@ if __name__ == "__main__":
     result_dir = os.path.join(MTMC_DIR, f"S{seq_id:02d}")
 
     if args.execute:
-        run_mtmc_reid(seq_id, result_dir)
+        tracker_config = {
+            "visual_only": args.visual_only,
+            "visual_threshold": args.visual_thr,
+            "spatial_threshold": args.spatial_thr
+        }
+        run_mtmc_reid(seq_id, result_dir, **tracker_config)
 
     run_evaluation(seq_id, result_dir)
