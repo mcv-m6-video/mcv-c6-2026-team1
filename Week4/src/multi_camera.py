@@ -18,7 +18,7 @@ MTSC_DIR = "MTSC"
 MTMC_DIR = "MTMC"
 PRED_FILENAME = "track1.txt"
 VIS_THR = 0.7
-SPA_THR = 10.0
+SPA_THR = 0.001
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run multi-camera ReID and evaluation for the CVPR 2022 AI City Challenge Track1 dataset.")
