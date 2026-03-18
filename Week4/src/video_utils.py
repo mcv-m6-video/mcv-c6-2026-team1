@@ -7,7 +7,7 @@ import time
 from tqdm import tqdm
 from collections import defaultdict
 from src.detection.evaluation import load_gts, load_preds
-from src.eval import get_gt_data, get_sequence_dir, loadroi
+from src.eval import get_gt_data, get_sequence_dir, loadroi, readData
 
 DEFAULT_VIDEO_PATH = "data/AICity_data/train/S03/c010/vdo.avi"
 
@@ -75,18 +75,6 @@ def play_video(video_path=DEFAULT_VIDEO_PATH, width=640, height=360):
     finally:
         cap.release()
 
-def _get_bboxes_by_frame(annotations: dict):
-    bboxes_by_frame = defaultdict(list)
-    for ann in annotations:
-        bboxes_by_frame[ann["image_id"]].append(ann["bbox"])
-    return bboxes_by_frame
-
-def _draw_bboxes(frame, frame_bboxes, color=(0, 255, 0)):
-    for (x, y, w, h) in frame_bboxes:
-        x1, y1 = int(x), int(y)
-        x2, y2 = int(x + w), int(y + h)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
-
 def _draw_bboxes_with_id(frame, frame_bboxes_with_ids, color=(0, 255, 0)):
     """
     Draws bounding boxes and their tracking IDs with a background for readability.
@@ -113,59 +101,6 @@ def _draw_bboxes_with_id(frame, frame_bboxes_with_ids, color=(0, 255, 0)):
         # Draw text (white text over the colored background)
         cv2.putText(frame, text, (x1 + 2, y1 - 4), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
-def load_gt_json():
-    return _get_bboxes_by_frame(load_gts()["annotations"])
-
-def load_preds_json(preds_dir):
-    return _get_bboxes_by_frame(load_preds(preds_dir))
-
-def extract_video(
-    video_path=DEFAULT_VIDEO_PATH, 
-    output_path="output.mp4",
-    preds_dir=None,
-    start_frame=0,
-    end_frame=-1
-):
-    """
-    Extracts a video segment showing GTs, optionally drawing predictions.
-    """
-    gts = load_gt_json()
-    if preds_dir:
-        preds = load_preds_json(preds_dir)
-        
-    cap = init_video(video_path)
-    n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    size = ( int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) )
-    fps = cap.get(cv2.CAP_PROP_FPS)
-
-    # Fast-forward to the start_frame efficiently
-    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-    
-    # Initialize OpenCV VideoWriter
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
-    out = cv2.VideoWriter(output_path, fourcc, fps, size)
-
-    if end_frame < 0 or n_frames < end_frame:
-        end_frame = n_frames
-
-    print(f"Extracting frames {start_frame}-{end_frame} from {video_path}...")
-
-    for frame_idx in tqdm(range(start_frame, end_frame)):
-        ret, frame = cap.read()
-        if not ret: raise IOError
-
-        # Draw ground truths and predictions if requested
-        _draw_bboxes(frame, gts[frame_idx])
-        if preds_dir:
-            _draw_bboxes(frame, preds[frame_idx], color=(0, 0, 255))
-        
-        # Write frame to the output file
-        out.write(frame)
-
-    cap.release()
-    out.release()
-    print(f"Frames successfully saved to '{output_path}'.")
-
 def _get_bboxes_by_frame_ai_city(gt_df, cam_id):
     """
     Filters the AI City ground truth DataFrame for a specific camera 
@@ -183,28 +118,64 @@ def _get_bboxes_by_frame_ai_city(gt_df, cam_id):
         
     return bboxes_by_frame
 
+def _get_iou(boxA, boxB):
+    """Calculate Intersection over Union between two boxes [x, y, w, h]."""
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[0] + boxA[2], boxB[0] + boxB[2])
+    yB = min(boxA[1] + boxA[3], boxB[1] + boxB[3])
+    interArea = max(0, xB - xA) * max(0, yB - yA)
+    boxAArea = boxA[2] * boxA[3]
+    boxBArea = boxB[2] * boxB[3]
+    return interArea / float(boxAArea + boxBArea - interArea + 1e-12)
+
 def extract_video_AI_city(
     seq_id,
     cam_id,
-    video_path=None,
+    preds_folder=None,
+    filter_single_camera=True,
     output_path="output.mp4",
     start_frame=0,
     end_frame=-1,
 ):
     """
-    Extracts a video segment from the AI City Challenge dataset showing GTs and ROI.
-    GTs are obtained dynamically based on the camera ID. If 'video_path' is not None, it overlays them for predictions.
+    Extracts a video segment from the AI City Challenge dataset showing GTs and predictions within ROI.
+    Blue: Ground Truth | Green: True Positive | Red: False Positive
     """
+    preds = None
     gt_df = get_gt_data()
     not_roi_mask = loadroi(cam_id) < 255
     
     # Process GTs for the specific camera
     gts = _get_bboxes_by_frame_ai_city(gt_df, cam_id)
+
+    # Load sequence predictions
+    if preds_folder is not None:
+
+        if filter_single_camera:
+            preds_path = os.path.join(preds_folder, f"S{seq_id:02d}", "track1.txt")
+        else:
+            preds_path = os.path.join(preds_folder, f"S{seq_id:02d}", f"c{cam_id:03d}", "track1.txt")
+
+        if os.path.exists(preds_path):
+            print(f"[INFO] Loading tracking predictions from: {preds_path}")
+            preds_df = readData(preds_path)
+
+            # Keep only IDs that appear in more than 1 camera
+            if filter_single_camera:
+                cam_counts = preds_df.groupby('Id')['CameraId'].nunique()
+                valid_ids = cam_counts[cam_counts > 1].index
+                preds_df = preds_df[preds_df['Id'].isin(valid_ids)]
+                print(f"[INFO] Kept {len(valid_ids)} out of {len(cam_counts)} global IDs (appearing in >1 cameras).")
+
+            preds = _get_bboxes_by_frame_ai_city(preds_df, cam_id)
+        else:
+            print(f"[WARNING] No prediction file found at '{preds_path}'. Predictions will NOT be shown.")
+    else:
+        print("[INFO] No 'preds_folder' provided. Predictions will NOT be shown.")
         
     # Original video
-    if video_path is None:
-        video_path = os.path.join(get_sequence_dir(seq_id), f"c{cam_id:03d}", "vdo.avi")
-
+    video_path = os.path.join(get_sequence_dir(seq_id), f"c{cam_id:03d}", "vdo.avi")
     cap = init_video(video_path)
 
     n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -235,11 +206,28 @@ def extract_video_AI_city(
         # AI City Challenge frames are 1-indexed, but OpenCV frame_idx is 0-indexed.
         ai_city_frame_idx = frame_idx + 1
 
-        # Draw ground truths if they exist for this frame
-        if ai_city_frame_idx in gts:
-            _draw_bboxes_with_id(frame, gts[ai_city_frame_idx])
-        
-        # Write frame to the output file
+        # Draw Ground Truths (Blue)
+        for gt_box, gt_id in gts.get(ai_city_frame_idx, []):
+            x, y, w, h = gt_box
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2) # Blue
+            cv2.putText(frame, f"GT:{gt_id}", (x, y - 5), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+        # Draw Predictions (Green/Red) based on IoU with any GT in the same frame
+        if preds is not None:
+            for p_box, p_id in preds.get(ai_city_frame_idx, []):
+                is_tp = False
+                for gt_box, gt_id in gts.get(ai_city_frame_idx, []):
+                    if _get_iou(p_box, gt_box) >= 0.5:
+                        is_tp = True
+                        break
+                
+                color = (0, 255, 0) if is_tp else (0, 0, 255) # Green if TP, Red if FP
+                px, py, pw, ph = map(int, p_box)
+                cv2.rectangle(frame, (px, py), (px + pw, py + ph), color, 2)
+                cv2.putText(frame, f"Pred:{p_id}", (px, py + ph + 15), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
         out.write(frame)
 
     cap.release()
@@ -262,7 +250,3 @@ def video_to_gif(input_video: str, output_gif: str, fps: int = 20, width: int = 
         print(f"ERROR: FFmpeg failed to convert the video. {e}")
     except FileNotFoundError:
         print("ERROR: FFmpeg is not installed or not in your system PATH.")
-
-if __name__ == "__main__":
-    # Example Usage: Extract the first 400 test frames (start_frame=535) from the original video
-    extract_video(start_frame=535, end_frame=935)
