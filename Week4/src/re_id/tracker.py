@@ -29,10 +29,10 @@ class CityScaleTracker:
             times_b, coords_b = _extract_trajectory(track_b)
             dt_matrix = np.abs(times_a[:, np.newaxis] - times_b[np.newaxis, :])
             closest_b_indices = np.argmin(dt_matrix, axis=1)
-            sync_mask = np.min(dt_matrix, axis=1) <= 0.5
+            sync_mask = np.min(dt_matrix, axis=1) <= 1.0
 
             if np.any(sync_mask):
-                # Tracks are synchronized by at least 0.5s
+                # Tracks are synchronized by at least 1s
                 valid_a_indices = np.where(sync_mask)[0]
                 valid_b_indices = closest_b_indices[sync_mask]
 
@@ -44,7 +44,8 @@ class CityScaleTracker:
                 dist = float(np.mean(np.linalg.norm(sync_coords_a - sync_coords_b, axis=1)))
 
                 # Apply distance threshold. Account for similar vehicles
-                return float("inf") if dist > self.spatial_threshold else dist
+                if dist > self.spatial_threshold:
+                    return float("inf")
             
             else:
                 # No time overlap: verify by maximum velocity
@@ -54,8 +55,12 @@ class CityScaleTracker:
                 speed = np.linalg.norm(coords_a[i] - coords_b[j]) / dt_matrix[i, j]
                 max_speed_b = np.max(np.linalg.norm(coords_b[1:] - coords_b[:-1], axis=1) / np.diff(times_b))
 
-                # Apply speed threshold. Account for similar vehicles and GPS noise
-                return float("inf") if speed > 2*max_speed_b else speed # Allow for double speed
+                # Apply speed threshold. Account for similar vehicles and GPS noise (allow up to 2x speed)
+                if speed > 2*max_speed_b:
+                    return float("inf") 
+                
+            # Return visual cost after spatiotemporal filtering
+            return visual_dist
 
         cost_matrix = np.full((len(tracks_a), len(tracks_b)), float('inf'))
         for i, track_a in enumerate(tracks_a.values()):

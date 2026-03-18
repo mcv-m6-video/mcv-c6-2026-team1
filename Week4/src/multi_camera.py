@@ -77,7 +77,7 @@ def build_camera_tracklets(seq_id, cam_id, tracklets_dict, reid_extractor, box_f
         # Sort by bounding box area to find the largest, clearest view
         detections.sort(key=lambda d: d['area'], reverse=True)
         
-        # TODO: TRY TOP-K MEAN EMBEDDINGS INSTEAD OF JUST THE BEST FRAME
+        # FUTURE WORK: TRY TOP-K MEAN EMBEDDINGS
         best_det = None
         for det in detections:
             if box_filter.is_trustworthy(det['bbox'], cam_id):
