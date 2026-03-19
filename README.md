@@ -1,5 +1,7 @@
 # MCV C6 Project (Team 1)
 
+<a href="https://docs.google.com/presentation/d/12v1sBgZ_WA8D_gI3-LlnDFucc1osQ8b1-CiTLNnGpuM/edit?usp=sharing"><b>Final Presentation Link</b></a>
+
 ## Members
 
 - Diego Hernández Antón
