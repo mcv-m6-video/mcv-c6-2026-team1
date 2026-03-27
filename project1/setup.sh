@@ -12,8 +12,8 @@ source ~/miniconda3/bin/activate
 conda init --all
 
 # Creating the environment:
-conda create --name c6-team1 python==3.10.14 -y
-conda activate c6-team1
+conda create --name c6-project1-team1 python==3.10.14 -y
+conda activate c6-project1-team1
 
 # Install FFmpeg
 conda install -c conda-forge ffmpeg -y

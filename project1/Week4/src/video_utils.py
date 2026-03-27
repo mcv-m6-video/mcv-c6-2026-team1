@@ -234,7 +234,7 @@ def extract_video_AI_city(
     out.release()
     print(f"Frames successfully saved to '{output_path}'.")
 
-def video_to_gif(input_video: str, output_gif: str, fps: int = 20, width: int = 480):
+def video_to_gif(input_video: str, output_gif: str, fps: int = 20, width: int = 2000):
     """
     Converts a video to a GIF with reduced resolution using FFmpeg.
     """

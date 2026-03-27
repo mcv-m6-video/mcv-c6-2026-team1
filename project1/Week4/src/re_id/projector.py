@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
     # Unit test: remove distortion of S01_c005
     seq_id = 1
-    cam_id = 5
+    cam_id = 2
     seq_str = f"S{seq_id:02d}"
     cam_str = f"c{cam_id:03d}"
 
@@ -131,6 +131,7 @@ if __name__ == "__main__":
         print(f"Error: Could not read video file at {video_path}")
     elif K is None or D is None:
         print(f"{cam_str} does not contain distortion.")
+        cv2.imwrite(f"original_{seq_str}_{cam_str}.png", frame)
     else:
         print(f"Intrinsics:\n{K}")
         print(f"Distortion:\n{D}")
