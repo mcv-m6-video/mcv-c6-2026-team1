@@ -12,17 +12,25 @@ cd project2
 conda activate c6-project2-team1
 ```
 
+## Getting the dataset and data preparation
+
+Refer to the README files in the [data/soccernetball](/data/soccernetball) directories within each task folder for instructions on how to download the SN-BAS-2025 dataset, preparation of directories, and extraction of the video frames. We prepared the script **`get_data.sh`** to process everything directly, but you will need the password to unzip the data splits.
+
 ## Project Structure
 
-`TaskX/` contains everything developed during task `X`.
+`TaskX/` contains everything developed during task `X`. Data should be downloaded in the project root.
 
 ```bash
 project2/
 ├── .gitignore
+├── download_frames_snb.py # Download (protected) data
+├── extract_frames_snb.py  # Extract frames from unzipped data
+├── get_data.sh            # Script to prepare the data
 ├── README.md
 ├── requirements.txt
-├── setup.sh
+├── setup.sh               # Script to setup the environment
+├── SoccerNet/             # Project data
 ├── TaskX/
 │   ├── ...
-└── └── README.md  # Documentation for Task X
+└── └── README.md          # Documentation for Task X
 ```

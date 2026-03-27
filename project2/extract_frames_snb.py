@@ -5,7 +5,6 @@ import moviepy.editor
 from tqdm import tqdm
 from multiprocessing import Pool
 cv2.setNumThreads(0)
-from util.dataset import read_fps
 
 '''
 This script extracts frames from SoccerNetv2 Ball Action Spotting dataset by introducing the path where the downloaded videos are (at 720p resolution), the path to

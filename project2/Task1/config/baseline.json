@@ -1,8 +1,8 @@
 {
-    "frame_dir": "/data-fast/data-server/aclapes/SN-BAS-2025_frames/398x224",
-    "save_dir": "/data-fast/data-server/aclapes/SN-BAS-2025_savedata",
-    "labels_dir": "/data-fast/data-server/aclapes/SN-BAS-2025",
-    "store_mode": "store",
+    "frame_dir": "./../SoccerNet/SN-BAS-2025-FRAMES/398x224",
+    "save_dir": "./../SoccerNet/SN-BAS-2025-SAVE_DIR",
+    "labels_dir": "./../SoccerNet/SN-BAS-2025",
+    "store_mode": "load",
     "task": "classification",
     "batch_size": 4,
     "clip_len": 50,
