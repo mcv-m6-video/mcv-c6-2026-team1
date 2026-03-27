@@ -1,4 +1,4 @@
-# MCV C6 Project (Team 1)
+# MCV C6 Project 1: Traffic Monitoring (Team 1)
 
 <a href="https://docs.google.com/presentation/d/12v1sBgZ_WA8D_gI3-LlnDFucc1osQ8b1-CiTLNnGpuM/edit?usp=sharing"><b>Final Presentation Link</b></a>
 
@@ -15,7 +15,7 @@
 This project uses Git submodules. Clone the repository as below:
 ```bash
 git clone --recurse-submodules https://github.com/mcv-m6-video/mcv-c6-2026-team1.git
-cd mcv-c6-2026-team1/
+cd mcv-c6-2026-team1/project1
 ```
 
 If you cloned the repository without submodules, run:
@@ -27,7 +27,7 @@ Setup the environment:
 
 ```bash
 ./setup.sh
-conda activate c6-team1
+conda activate c6-project1-team1
 ```
 
 ## Project Structure
@@ -35,7 +35,7 @@ conda activate c6-team1
 `WeekX/` contains everything developed during week `X`.
 
 ```bash
-mcv-c6-2026-team1/
+mcv-c6-2026-team1/project1
 ├── .gitignore
 ├── README.md
 ├── requirements.txt
