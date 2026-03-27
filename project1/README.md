@@ -18,6 +18,7 @@ conda activate c6-project1-team1
 
 ```bash
 project1/
+├── .gitignore
 ├── README.md
 ├── requirements.txt
 ├── setup.sh
