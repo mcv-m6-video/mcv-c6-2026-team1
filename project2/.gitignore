@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
 *.pyo
-SoccerNet
+*.jpg
+*.pth
+SoccerNet/
 *.log
