@@ -106,7 +106,6 @@ def build_backbone(feature_arch):
     raise NotImplementedError(feature_arch)
 
 
-
 class Model(BaseRGBModel):
     class Impl(nn.Module):
 
@@ -142,6 +141,14 @@ class Model(BaseRGBModel):
                 T.Normalize(mean = (0.485, 0.456, 0.406), std = (0.229, 0.224, 0.225)) #Imagenet mean and std
             ])
 
+            self.use_auxiliary = getattr(self.args, 'use_auxiliary', False)
+            self.aux_weight = getattr(self.args, 'aux_weight', 0.1)
+
+            if self.use_auxiliary:
+                self._aux_event_head = nn.Linear(self._d, 1)
+            else:
+                self._aux_event_head = None
+
         def forward(self, x):
             x = self.normalize(x) #Normalize to 0-1
             batch_size, clip_len, channels, height, width = x.shape #B, T, C, H, W
@@ -155,13 +162,22 @@ class Model(BaseRGBModel):
                 x.view(-1, channels, height, width)
             ).reshape(batch_size, clip_len, self._d) #B, T, D
 
-            # Aggregate latens within a clip
-            im_feat = self.temporal_module(im_feat)
 
-            #MLP
-            im_feat = self._fc(im_feat) #B, num_classes
+            aux_event_logits = None
+            if self.use_auxiliary:
+                aux_event_logits = self._aux_event_head(im_feat).squeeze(-1)  # (B, T, 1) to (B, T) 
 
-            return im_feat 
+            # Main task
+            clip_feat = self.temporal_module(im_feat)   # B, D
+            main_logits = self._fc(clip_feat) 
+
+            if self.use_auxiliary:
+                return {
+                    'main_logits': main_logits,
+                    'aux_event_logits': aux_event_logits
+                }
+
+            return main_logits 
         
         def normalize(self, x):
             return x / 255.
@@ -204,10 +220,25 @@ class Model(BaseRGBModel):
                 label = batch['label']
                 label = label.to(self.device).float()
 
+                if self._args.use_auxiliary:
+                    eventness = batch['eventness'].to(self.device).float()
+
                 with torch.cuda.amp.autocast():
                     pred = self._model(frame)
-                    loss = F.binary_cross_entropy_with_logits(
-                            pred, label)
+
+                    if self._args.use_auxiliary:
+                        main_logits = pred['main_logits']
+                        aux_event_logits = pred['aux_event_logits']
+
+                        main_loss = F.binary_cross_entropy_with_logits(
+                            main_logits, label
+                        )
+                        aux_loss = F.binary_cross_entropy_with_logits(
+                            aux_event_logits, eventness
+                        )
+                        loss = main_loss + self._args.aux_weight * aux_loss
+                    else:
+                        loss = F.binary_cross_entropy_with_logits(pred, label)
 
                 if optimizer is not None:
                     step(optimizer, scaler, loss,
@@ -231,6 +262,9 @@ class Model(BaseRGBModel):
         with torch.no_grad():
             with torch.cuda.amp.autocast():
                 pred = self._model(seq)
+
+                if self._args.use_auxiliary:
+                    pred = pred['main_logits']
 
             # apply sigmoid
             pred = torch.sigmoid(pred)

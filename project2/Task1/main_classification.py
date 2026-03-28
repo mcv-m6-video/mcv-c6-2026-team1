@@ -37,6 +37,8 @@ def update_args(args, config):
     args.labels_dir = config['labels_dir']
     args.store_mode = config['store_mode']
     args.task = config['task']
+    args.use_auxiliary = config['use_auxiliary']
+    args.aux_weight = config['aux_weight']
     args.batch_size = config['batch_size']
     args.clip_len = config['clip_len']
     args.dataset = config['dataset']
@@ -124,7 +126,7 @@ def main(args):
             args, optimizer, num_steps_per_epoch)
         
         losses = []
-        best_criterion = float('inf')
+        best_criterion = -float('inf')
         epoch = 0
 
         print('START TRAINING EPOCHS')
@@ -135,15 +137,17 @@ def main(args):
                 lr_scheduler=lr_scheduler)
             
             val_loss = model.epoch(val_loader)
+            val_ap_score = evaluate(model, val_data)
+            val_map = np.mean(val_ap_score)
 
             better = False
-            if val_loss < best_criterion:
-                best_criterion = val_loss
+            if val_map < best_criterion:
+                best_criterion = val_map
                 better = True
             
             #Printing info epoch
-            print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f}'.format(
-                epoch, train_loss, val_loss))
+            print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f} Val mAP: {:0.2f}'.format(
+                epoch, train_loss, val_loss, val_map * 100))
             if better:
                 print('New best mAP epoch!')
 
