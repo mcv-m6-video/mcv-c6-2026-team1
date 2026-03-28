@@ -18,33 +18,115 @@ from thop import clever_format
 #Local imports
 from model.modules import BaseRGBModel, FCLayers, step
 
-class Model(BaseRGBModel):
 
+# Temporal operations
+class TransformerLayer(nn.Module):
+    def __init__(self, embed_dim, num_heads, attn_dropout, mlp_dim):
+        super().__init__()
+        self.multi_head = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            dropout=attn_dropout,
+            batch_first=True
+        )
+        self.mlp = nn.Sequential(
+            nn.Linear(embed_dim, mlp_dim),
+            nn.ReLU(),
+            nn.Linear(mlp_dim, embed_dim)
+        )
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.norm2 = nn.LayerNorm(embed_dim)
+
+    def forward(self, x):
+        attn_out, _ = self.multi_head(
+            self.norm1(x), self.norm1(x), self.norm1(x)
+        )
+        x = x + attn_out
+        x = x + self.mlp(self.norm2(x))
+        return x
+
+
+class TemporalTransformer(nn.Module):
+    def __init__(self, seq_len, embed_dim, num_heads, depth, attn_dropout, mlp_dim):
+        super().__init__()
+        self.temporal_embed = nn.Parameter(torch.randn(1, seq_len + 1, embed_dim))
+        self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim))
+
+        self.transformer_blocks = nn.ModuleList([
+            TransformerLayer(embed_dim, num_heads, attn_dropout, mlp_dim)
+            for _ in range(depth)
+        ])
+
+    def forward(self, x):
+        B, T, D = x.shape
+
+        cls_tokens = self.cls_token.expand(B, -1, -1)   # (B, 1, D)
+        x = torch.cat((cls_tokens, x), dim=1)           # (B, T+1, D)
+        x = x + self.temporal_embed[:, :T+1, :]
+
+        for block in self.transformer_blocks:
+            x = block(x)
+
+        return x[:, 0]
+    
+
+class TemporalMaxPool(nn.Module):
+    def forward(self, x):
+        return torch.max(x, dim=1)[0]
+    
+
+def build_temporal_module(args, embed_dim):
+    if args.temp_aggregation.lower() == "max":
+        return TemporalMaxPool()
+    if args.temp_aggregation.lower() == "transformer":
+        return TemporalTransformer(
+            seq_len=args.clip_len,
+            embed_dim=embed_dim,
+            num_heads=args.attention_heads,
+            depth=args.transformer_depth,
+            attn_dropout=args.transformer_dropout,
+            mlp_dim=args.transformer_mlp_dim
+        )
+    
+    raise NotImplementedError(args.temp_aggregation)
+
+# Backbone
+def build_backbone(feature_arch):
+    if feature_arch.startswith(('rny002', 'rny004', 'rny008')):
+        model_name = {
+            'rny002': 'regnety_002',
+            'rny004': 'regnety_004',
+            'rny008': 'regnety_008',
+        }[feature_arch.rsplit('_', 1)[0]]
+
+        features = timm.create_model(model_name, pretrained=True)
+        feat_dim = features.head.fc.in_features
+        features.head.fc = nn.Identity()
+        return features, feat_dim
+
+    raise NotImplementedError(feature_arch)
+
+
+
+class Model(BaseRGBModel):
     class Impl(nn.Module):
 
         def __init__(self, args = None):
             super().__init__()
-            self._feature_arch = args.feature_arch
+            self.args = args
+            self._feature_arch = self.args.feature_arch
 
-            if self._feature_arch.startswith(('rny002', 'rny004', 'rny008')):
-                features = timm.create_model({
-                    'rny002': 'regnety_002',
-                    'rny004': 'regnety_004',
-                    'rny008': 'regnety_008',
-                }[self._feature_arch.rsplit('_', 1)[0]], pretrained=True)
-                feat_dim = features.head.fc.in_features
+            # Build backone
+            self._features, self._d = build_backbone(self._feature_arch)
 
-                # Remove final classification layer
-                features.head.fc = nn.Identity()
-                self._d = feat_dim
-
-            else:
-                raise NotImplementedError(args._feature_arch)
-
-            self._features = features
+            # How to aggregate latents
+            self.temporal_module = build_temporal_module(
+                args=self.args,
+                embed_dim=self._d
+            )
 
             # MLP for classification
-            self._fc = FCLayers(self._d, args.num_classes)
+            self._fc = FCLayers(self._d, self.args.num_classes)
 
             #Augmentations and crop
             self.augmentation = T.Compose([
@@ -74,8 +156,8 @@ class Model(BaseRGBModel):
                 x.view(-1, channels, height, width)
             ).reshape(batch_size, clip_len, self._d) #B, T, D
 
-            #Max pooling
-            im_feat = torch.max(im_feat, dim=1)[0] #B, D
+            # Aggregate latens within a clip
+            im_feat = self.temporal_module(im_feat)
 
             #MLP
             im_feat = self._fc(im_feat) #B, num_classes

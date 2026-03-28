@@ -12,10 +12,17 @@
     "feature_arch": "rny002",
     "learning_rate": 0.0008,
     "num_classes": 12,
-    "num_epochs": 15,
+    "num_epochs": 35,
     "warm_up_epochs": 3,
     "only_test": false,
     "device": "cuda",
     "num_workers": 4,
-    "temp_aggregation": "max"
-}
+    "temp_aggregation": "transformer",
+    "attention_heads": 4,
+    "transformer_depth": 2,
+    "transformer_dropout": 0.1,
+    "transformer_mlp_dim": 512}
+
+
+        
+        
