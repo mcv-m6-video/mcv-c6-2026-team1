@@ -17,5 +17,12 @@
     "only_test": false,
     "device": "cuda",
     "num_workers": 4,
-    "temp_aggregation": "max"
-}
+    "temp_aggregation": "transformer",
+    "attention_heads": 4,
+    "transformer_depth": 2,
+    "transformer_dropout": 0.1,
+    "transformer_mlp_dim": 512}
+
+
+        
+        

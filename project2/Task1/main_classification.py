@@ -49,6 +49,11 @@ def update_args(args, config):
     args.only_test = config['only_test']
     args.device = config['device']
     args.num_workers = config['num_workers']
+    args.temp_aggregation = config['temp_aggregation']
+    args.attention_heads = config['attention_heads']
+    args.transformer_depth = config['transformer_depth']
+    args.transformer_dropout = config['transformer_dropout']
+    args.transformer_mlp_dim = config['transformer_mlp_dim']
 
     return args
 
@@ -71,7 +76,9 @@ def main(args):
     random.seed(args.seed)
 
     config_path = 'config/' + args.model + '.json'
-    config = load_json(config_path)
+    default_config = load_json('config/default.json')
+    model_config = load_json(config_path)
+    config = {**default_config, **model_config}
     args = update_args(args, config)
 
     # Directory for storing / reading model checkpoints
