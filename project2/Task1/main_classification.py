@@ -158,28 +158,39 @@ def main(args):
                 if better:
                     torch.save( model.state_dict(), os.path.join(ckpt_dir, 'checkpoint_best.pt') )
 
-    print('START INFERENCE')
+    print('\nSTART INFERENCE')
     model.load(torch.load(os.path.join(ckpt_dir, 'checkpoint_best.pt')))
 
     # Evaluation on test split
     ap_score = evaluate(model, test_data)
 
+    # Model stats
+    macs, params = model.get_stats()
+
     # Report results per-class in table
+    print('\nPER-CLASS METRICS\n')
     table = []
     for i, class_name in enumerate(classes.keys()):
         table.append([class_name, f"{ap_score[i]*100:.2f}"])
-
     headers = ["Class", "Average Precision"]
     print(tabulate(table, headers, tablefmt="grid"))
 
     # Report average results in table
-    avg_table = [["Average", f"{np.mean(ap_score)*100:.2f}"]]
-    headers = ["", "Average Precision"]
-
+    print('\nEVALUATION SUMMARY\n')
+    headers = ["Metric", "Score"]
+    avg_table = [
+        ["AP10", f"{np.mean(ap_score[:10])*100:.2f}"],
+        ["AP12", f"{np.mean(ap_score)*100:.2f}"]
+    ]
     print(tabulate(avg_table, headers, tablefmt="grid"))
-    
-    print('CORRECTLY FINISHED TRAINING AND INFERENCE')
 
+    # Report model stats
+    print('\nMODEL STATS\n')
+    headers = ["Model", "Params", "MACs"]
+    model_table = [[args.model, params, macs]]
+    print(tabulate(model_table, headers, tablefmt="grid"))
+
+    print('\nEXECUTION CORRECTLY FINISHED')
 
 if __name__ == '__main__':
     main(get_args())

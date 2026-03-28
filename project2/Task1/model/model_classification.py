@@ -12,8 +12,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 
 # Computational reporting
-from thop import profile
-from thop import clever_format
+from thop import profile, clever_format
 
 #Local imports
 from model.modules import BaseRGBModel, FCLayers, step
@@ -177,24 +176,12 @@ class Model(BaseRGBModel):
                 x[i] = self.standarization(x[i])
             return x
 
-        def print_stats(self, args):
-            # Dummy input (shape from arguments)
-            resolution_str = args.frame_dir.rstrip('/').split('/')[-1]
-            width, height = map(int, resolution_str.split('x'))
-            dummy_input = torch.randn(1, args.clip_len, 3, height, width)
-            
-            # Model parameters and complexity
-            macs, params = profile(self, inputs=(dummy_input, ), verbose=False)
-            macs_fmt, params_fmt = clever_format([macs, params], "%.3f")
-            print(f"Model Parameters: {params_fmt}, MACs: {macs_fmt}")
-
     def __init__(self, args=None):
         self.device = "cpu"
         if torch.cuda.is_available() and ("device" in args) and (args.device == "cuda"):
             self.device = "cuda"
 
         self._model = Model.Impl(args=args)
-        self._model.print_stats(args=args)
         self._args = args
 
         self._model.to(self.device)
@@ -249,3 +236,12 @@ class Model(BaseRGBModel):
             pred = torch.sigmoid(pred)
             
             return pred.cpu().numpy()
+
+    def get_stats(self):
+        # Dummy input (shape from arguments)
+        resolution_str = self._args.frame_dir.rstrip('/').split('/')[-1]
+        width, height = map(int, resolution_str.split('x'))
+        dummy_input = torch.randn(1, self._args.clip_len, 3, height, width).to(self.device)
+        
+        # Model parameters and complexity
+        return clever_format(profile(self._model, inputs=(dummy_input, ), verbose=False), "%.2f")
