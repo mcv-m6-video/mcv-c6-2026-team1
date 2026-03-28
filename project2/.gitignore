@@ -3,5 +3,5 @@ __pycache__/
 *.pyo
 *.jpg
 *.pth
-SoccerNet/
+SoccerNet
 *.log
