@@ -37,7 +37,6 @@ def update_args(args, config):
     args.labels_dir = config['labels_dir']
     args.store_mode = config['store_mode']
     args.task = config['task']
-    args.use_auxiliary = config['use_auxiliary']
     args.aux_weight = config['aux_weight']
     args.batch_size = config['batch_size']
     args.clip_len = config['clip_len']
@@ -129,7 +128,7 @@ def main(args):
         best_criterion = -float('inf')
         epoch = 0
 
-        print('START TRAINING EPOCHS')
+        print(f'START TRAINING EPOCHS. Model {args.model}')
         for epoch in range(epoch, num_epochs):
 
             train_loss = model.epoch(
@@ -141,7 +140,7 @@ def main(args):
             val_map = np.mean(val_ap_score)
 
             better = False
-            if val_map < best_criterion:
+            if val_map > best_criterion:
                 best_criterion = val_map
                 better = True
             

@@ -141,8 +141,8 @@ class Model(BaseRGBModel):
                 T.Normalize(mean = (0.485, 0.456, 0.406), std = (0.229, 0.224, 0.225)) #Imagenet mean and std
             ])
 
-            self.use_auxiliary = getattr(self.args, 'use_auxiliary', False)
             self.aux_weight = getattr(self.args, 'aux_weight', 0.1)
+            self.use_auxiliary = self.aux_weight != 0
 
             if self.use_auxiliary:
                 self._aux_event_head = nn.Linear(self._d, 1)
@@ -203,6 +203,9 @@ class Model(BaseRGBModel):
         self._model.to(self.device)
         self._num_classes = args.num_classes
 
+        self.aux_weight = getattr(self._args, 'aux_weight', 0.1)
+        self.use_auxiliary = self.aux_weight != 0
+
     def epoch(self, loader, optimizer=None, scaler=None, lr_scheduler=None):
 
         if optimizer is None:
@@ -220,13 +223,13 @@ class Model(BaseRGBModel):
                 label = batch['label']
                 label = label.to(self.device).float()
 
-                if self._args.use_auxiliary:
+                if self.use_auxiliary:
                     eventness = batch['eventness'].to(self.device).float()
 
                 with torch.cuda.amp.autocast():
                     pred = self._model(frame)
 
-                    if self._args.use_auxiliary:
+                    if self.use_auxiliary:
                         main_logits = pred['main_logits']
                         aux_event_logits = pred['aux_event_logits']
 
@@ -263,7 +266,7 @@ class Model(BaseRGBModel):
             with torch.cuda.amp.autocast():
                 pred = self._model(seq)
 
-                if self._args.use_auxiliary:
+                if self.use_auxiliary:
                     pred = pred['main_logits']
 
             # apply sigmoid

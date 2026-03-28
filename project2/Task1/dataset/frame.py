@@ -42,7 +42,7 @@ class ActionSpotDataset(Dataset):
             dataset = 'soccernetball',  # Dataset name
             labels_dir = None,          # Directory with labels for SoccerNetBall
             task = 'classification',    # Classification or localization,
-            use_auxiliary = 'False'     # Return data necessary for the auxiliary task when in 'classification'
+            aux_weight = 0              # Weight for the auxiliary task when in 'classification'
     ):
         self._src_file = game_file
         self._games = load_json(game_file)
@@ -65,7 +65,8 @@ class ActionSpotDataset(Dataset):
         self._labels_dir = labels_dir
         self._task = task
         assert task in ['classification', 'spotting']
-        self.use_auxiliary = use_auxiliary
+        self.aux_weight = aux_weight
+        self.use_auxiliary = self.aux_weight != 0
 
         #Frame reader class
         self._frame_reader = FrameReader(frame_dir, dataset = dataset)

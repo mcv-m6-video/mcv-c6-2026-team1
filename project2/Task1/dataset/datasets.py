@@ -23,7 +23,7 @@ def get_datasets(args):
     dataset_kwargs = {
         'stride': stride, 'overlap': overlap, 
         'dataset': args.dataset, 'labels_dir': args.labels_dir, 
-        'task': args.task, 'use_auxiliary': args.use_auxiliary
+        'task': args.task, 'aux_weight': args.aux_weight
     }
 
     print('Dataset size:', dataset_len)
