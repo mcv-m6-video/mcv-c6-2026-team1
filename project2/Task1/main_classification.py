@@ -189,7 +189,7 @@ def main(args):
             print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f} Val AP10: {:0.2f}'.format(
                 epoch, train_loss, val_loss, val_ap10 * 100))
             if better:
-                print('New best mAP epoch!')
+                print('New best AP10 epoch!')
 
             losses.append({
                 'epoch': epoch, 
