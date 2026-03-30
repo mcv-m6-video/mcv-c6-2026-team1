@@ -21,7 +21,9 @@ def get_datasets(args):
     overlap = args.overlap if "overlap" in args else DEFAULT_OVERLAP
 
     dataset_kwargs = {
-        'stride': stride, 'overlap': overlap, 'dataset': args.dataset, 'labels_dir': args.labels_dir, 'task': args.task,
+        'stride': stride, 'overlap': overlap, 
+        'dataset': args.dataset, 'labels_dir': args.labels_dir, 
+        'task': args.task, 'aux_weight': args.aux_weight
     }
 
     print('Dataset size:', dataset_len)

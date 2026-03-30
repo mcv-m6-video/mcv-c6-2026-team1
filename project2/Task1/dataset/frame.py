@@ -39,9 +39,10 @@ class ActionSpotDataset(Dataset):
             overlap=1,                  # Overlap between clips (in proportion to clip_len)
             pad_len=DEFAULT_PAD_LEN,    # Number of frames to pad the start
                                         # and end of videos
-            dataset = 'soccernetball',     # Dataset name
+            dataset = 'soccernetball',  # Dataset name
             labels_dir = None,          # Directory with labels for SoccerNetBall
-            task = 'classification'     # Classification or localization
+            task = 'classification',    # Classification or localization,
+            aux_weight = 0              # Weight for the auxiliary task when in 'classification'
     ):
         self._src_file = game_file
         self._games = load_json(game_file)
@@ -64,6 +65,8 @@ class ActionSpotDataset(Dataset):
         self._labels_dir = labels_dir
         self._task = task
         assert task in ['classification', 'spotting']
+        self.aux_weight = aux_weight
+        self.use_auxiliary = self.aux_weight != 0
 
         #Frame reader class
         self._frame_reader = FrameReader(frame_dir, dataset = dataset)
@@ -159,8 +162,23 @@ class ActionSpotDataset(Dataset):
             for label in dict_label:
                 labels[label['label']-1] = 1 # labels start at 1
 
-        return {'frame': frames, 'contains_event': int(np.sum(labels) > 0),
-                'label': labels}
+            # Auxiliary target only for classification
+            if self.use_auxiliary:
+                eventness = np.zeros(self._clip_len, np.float32)
+                for item in dict_label:
+                    eventness[item['label_idx']] = 1.0
+
+        out = {
+            'frame': frames,
+            'contains_event': int(np.sum(labels) > 0),
+            'label': labels
+        }
+
+        # Add auxiliary only if enabled
+        if self.use_auxiliary:
+            out['eventness'] = eventness
+
+        return out
 
     def __getitem__(self, unused):
         ret = self._get_one()
