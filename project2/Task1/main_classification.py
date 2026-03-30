@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from tabulate import tabulate
 
 #Local imports
-from util.io import load_json, store_json
+from util.io import load_json, store_json, save_video
 from util.eval_classification import evaluate
 from util.experiment import build_experiment_name
 from dataset.datasets import get_datasets
@@ -25,6 +25,7 @@ from model.model_classification import Model
 # Evaluation imports
 from sklearn.metrics import precision_recall_curve
 import matplotlib.pyplot as plt
+from util.eval_classification import generate_qualitative_results
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -50,6 +51,7 @@ def update_args(args, config):
     args.num_epochs = config['num_epochs']
     args.warm_up_epochs = config['warm_up_epochs']
     args.only_test = config['only_test']
+    args.qualitatives = config['qualitatives']
     args.device = config['device']
     args.num_workers = config['num_workers']
 
@@ -249,6 +251,25 @@ def main(args):
     headers = ["Model", "Params", "MACs"]
     model_table = [[args.experiment_name, params, macs]]
     print(tabulate(model_table, headers, tablefmt="grid"))
+
+    if args.qualitatives:
+        print('\nGENERATING QUALITATIVE RESULTS')
+        qualitative_data = generate_qualitative_results(model, test_data)
+        qualitative_dir = os.path.join(args.run_dir, 'qualitative_results')
+        os.makedirs(qualitative_dir, exist_ok=True)
+        
+        json_dump = []
+        for idx, sample in enumerate(qualitative_data):
+            video_path = os.path.join(qualitative_dir, f"sample_{idx}.mp4")
+            save_video(video_path, sample["frames"])
+            json_dump.append({
+                "path": video_path,
+                "ground_truth": sample["gt"].tolist(),
+                "scores": sample["scores"].tolist()
+            })
+            
+        json_path = os.path.join(qualitative_dir, 'qualitative.json')
+        store_json(json_path, json_dump, pretty=True)
 
     print('\nEXECUTION CORRECTLY FINISHED')
 

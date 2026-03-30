@@ -33,3 +33,30 @@ def evaluate(model, dataset, batch_size=INFERENCE_BATCH_SIZE):
     ap_score = average_precision_score(labels, scores, average=None)  # Set to None so AP per class are not averaged
 
     return ap_score, labels, scores
+
+def generate_qualitative_results(model, dataset, num_samples=5, batch_size=INFERENCE_BATCH_SIZE):
+    qualitative_data = []
+    saved_count = 0
+    for clip in DataLoader(
+            dataset, num_workers=batch_size * 2, pin_memory=True,
+            batch_size=batch_size, shuffle=True # Random clips
+    ):
+        batch_frames = clip['frame'] 
+        batch_pred_scores = model.predict(batch_frames)
+        batch_labels = clip['label'].numpy()
+        
+        for i in range(min(len(batch_frames), num_samples - saved_count)):
+            # Permute to [T, H, W, C] for saving
+            video_tensor = batch_frames[i].cpu()
+            video_tensor = video_tensor.permute(0, 2, 3, 1)
+
+            qualitative_data.append({
+                "frames": video_tensor.numpy(),
+                "scores": batch_pred_scores[i], 
+                "gt": batch_labels[i] 
+            })
+            saved_count += 1
+
+        if saved_count >= num_samples:
+            return qualitative_data
+        

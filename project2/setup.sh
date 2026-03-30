@@ -15,7 +15,8 @@ conda init --all
 conda create --name c6-project2-team1 python==3.10.14 -y
 conda activate c6-project2-team1
 
-## PyTorch installation not needed: specified in `requirements.txt`
+# Install FFmpeg
+conda install -c conda-forge ffmpeg -y
 
 # Install for extracting SoccerNet videos
 conda install -c conda-forge p7zip -y
