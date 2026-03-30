@@ -104,8 +104,33 @@ def main(args):
     classes, train_data, val_data, test_data = get_datasets(args)
 
     if args.store_mode == 'store':
-        print('Datasets have been stored correctly! Re-run changing "mode" to "load" in the config JSON.')
-        sys.exit('Datasets have correctly been stored! Stop training here and rerun with load mode.')
+        print('Datasets have been stored correctly!')
+        print('Generating dataset statistics...')
+        stats = {}
+        idx_to_class = {v: k for k, v in classes.items()}
+
+        for split_name, dataset in [("train", train_data), ("val", val_data), ("test", test_data)]:
+            total_clips = len(dataset._labels_store)
+            cat_counts = {name: 0 for name in classes.keys()}
+            for clip_labels in dataset._labels_store:
+                # Avoid double counting multiple instances of the same class in a single clip
+                clip_classes = set([l['label'] for l in clip_labels])
+                for c_idx in clip_classes:
+                    cat_counts[idx_to_class[c_idx]] += 1
+                    
+            stats[split_name] = {
+                "total_clips": total_clips,
+                "counters": cat_counts
+            }
+            
+        # Save the dictionary to JSON
+        stats_path = os.path.join(args.save_dir, 'dataset_statistics.json')
+        store_json(stats_path, stats, pretty=True)
+        print(f"Dataset statistics saved to {stats_path}")
+
+        end_message = 'Re-run changing "mode" to "load" in the config JSON for training/inference.'
+        print(end_message)
+        sys.exit(end_message)
     else:
         print('Datasets have been loaded from previous versions correctly!')
 
