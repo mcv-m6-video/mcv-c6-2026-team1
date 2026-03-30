@@ -28,8 +28,7 @@ import matplotlib.pyplot as plt
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, required=True,
-                        help='Path to config json file')
+    parser.add_argument('--model', type=str, required=True)
     parser.add_argument('--seed', type=int, default=1)
     return parser.parse_args()
 
@@ -93,7 +92,8 @@ def main(args):
     np.random.seed(args.seed)
     random.seed(args.seed)
 
-    config = load_json(args.config)
+    config_path = 'config/' + args.model + '.json'
+    config = load_json(config_path)
     args = update_args(args, config)
 
     # Directory for storing / reading model checkpoints
@@ -193,10 +193,10 @@ def main(args):
         plt.plot(recall, precision, label=f"{class_name} (AP={ap_score[i]*100:.1f})")
     plt.xlabel('Recall')
     plt.ylabel('Precision')
-    plt.title('Precision-Recall Curve per Class')
+    plt.title('Precision-Recall Curve (per class)')
     plt.legend(loc="lower left", fontsize='small')
     plt.grid(True)
-    plt.savefig(os.path.join(args.save_dir, 'pr_curve.png'))
+    plt.savefig(os.path.join(args.run_dir, 'pr_curve.png'))
     plt.close()
 
     # Model stats
