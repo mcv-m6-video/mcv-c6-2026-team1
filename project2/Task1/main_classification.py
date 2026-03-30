@@ -178,16 +178,16 @@ def main(args):
             
             val_loss = model.epoch(val_loader)
             val_ap_score = evaluate(model, val_data)
-            val_map = np.mean(val_ap_score)
+            val_ap10 = np.mean(val_ap_score[:10])
 
             better = False
-            if val_map > best_criterion:
-                best_criterion = val_map
+            if val_ap10 > best_criterion:
+                best_criterion = val_ap10
                 better = True
             
             #Printing info epoch
-            print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f} Val mAP: {:0.2f}'.format(
-                epoch, train_loss, val_loss, val_map * 100))
+            print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f} Val AP10: {:0.2f}'.format(
+                epoch, train_loss, val_loss, val_ap10 * 100))
             if better:
                 print('New best mAP epoch!')
 
@@ -195,7 +195,7 @@ def main(args):
                 'epoch': epoch, 
                 'train_loss': float(train_loss),
                 'val_loss': float(val_loss),
-                'val_map': float(val_map),
+                'val_ap10': float(val_ap10),
                 'is_best': better
             })
 

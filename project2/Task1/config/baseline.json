@@ -12,10 +12,11 @@
     "learning_rate": 0.0008,
     "num_classes": 12,
     "warm_up_epochs": 3,
-    "only_test": false,
+    "only_test": true,
+    "qualitatives": true,
     "device": "cuda",
     "num_workers": 4,
-    "num_epochs": 25,
+    "num_epochs": 15,
 
     "_comment1": "Set aux_weight to 0 to disable auxiliary task.",
     "aux_weight": 0,
