@@ -32,4 +32,4 @@ def evaluate(model, dataset, batch_size=INFERENCE_BATCH_SIZE):
 
     ap_score = average_precision_score(labels, scores, average=None)  # Set to None so AP per class are not averaged
 
-    return ap_score
+    return ap_score, labels, scores

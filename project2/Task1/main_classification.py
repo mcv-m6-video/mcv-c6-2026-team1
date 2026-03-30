@@ -21,6 +21,9 @@ from util.eval_classification import evaluate
 from dataset.datasets import get_datasets
 from model.model_classification import Model
 
+# Evaluation imports
+from sklearn.metrics import precision_recall_curve
+import matplotlib.pyplot as plt
 
 def get_args():
     #Basic arguments
@@ -162,7 +165,19 @@ def main(args):
     model.load(torch.load(os.path.join(ckpt_dir, 'checkpoint_best.pt')))
 
     # Evaluation on test split
-    ap_score = evaluate(model, test_data)
+    ap_score, labels, scores = evaluate(model, test_data)
+
+    # Precision-Recall curve
+    for i, class_name in enumerate(classes.keys()):
+        precision, recall, _ = precision_recall_curve(labels[:, i], scores[:, i])
+        plt.plot(recall, precision, label=f"{class_name} (AP={ap_score[i]*100:.1f})")
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Precision-Recall Curve per Class')
+    plt.legend(loc="lower left", fontsize='small')
+    plt.grid(True)
+    plt.savefig(os.path.join(args.save_dir, 'pr_curve.png'))
+    plt.close()
 
     # Model stats
     macs, params = model.get_stats()
