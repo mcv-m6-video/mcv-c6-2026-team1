@@ -1,0 +1,33 @@
+{
+    "frame_dir": "./../SoccerNet/SN-BAS-2025-FRAMES/398x224",
+    "save_dir": "./../SoccerNet/SN-BAS-2025-SAVE_DIR",
+    "labels_dir": "./../SoccerNet/SN-BAS-2025",
+    "store_mode": "load",
+    "task": "classification",
+    "batch_size": 4,
+    "clip_len": 50,
+    "stride": 2,
+    "dataset": "soccernetball",
+    "epoch_num_frames": 500000,
+    "learning_rate": 0.0008,
+    "num_classes": 12,
+    "warm_up_epochs": 3,
+    "only_test": false,
+    "device": "cuda",
+    "num_workers": 4,
+    "num_epochs": 25,
+
+    "_comment1": "Set aux_weight to 0 to disable auxiliary task.",
+    "aux_weight": 0,
+
+    "_comment2": "Approach to aggregate each frame feature within a clip.",
+    "clip_aggregation": "max",
+    "attention_heads": 4,
+    "transformer_depth": 2,
+    "transformer_dropout": 0.1,
+    "transformer_mlp_dim": 850,
+
+    "_comment3": "Use CNN or ViT approach for encoder (vit_base_patch16_224 or rny002)",
+    "encoder_arch": "rny002",
+    "train_last_n_blocks": -1
+}
