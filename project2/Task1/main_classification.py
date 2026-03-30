@@ -18,31 +18,31 @@ from tabulate import tabulate
 #Local imports
 from util.io import load_json, store_json
 from util.eval_classification import evaluate
+from util.experiment import build_experiment_name
 from dataset.datasets import get_datasets
 from model.model_classification import Model
 
 
 def get_args():
-    #Basic arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, required=True)
+    parser.add_argument('--config', type=str, required=True,
+                        help='Path to config json file')
     parser.add_argument('--seed', type=int, default=1)
     return parser.parse_args()
 
 def update_args(args, config):
     #Update arguments with config file
     args.frame_dir = config['frame_dir']
-    args.save_dir = config['save_dir'] + '/' + args.model # + '-' + str(args.seed) -> in case multiple seeds
-    args.store_dir = config['save_dir'] + '/' + "splits"
+    args.save_dir = config['save_dir']
+    args.store_dir = os.path.join(config['save_dir'], "splits")
     args.labels_dir = config['labels_dir']
     args.store_mode = config['store_mode']
     args.task = config['task']
-    args.aux_weight = config['aux_weight']
     args.batch_size = config['batch_size']
     args.clip_len = config['clip_len']
     args.dataset = config['dataset']
     args.epoch_num_frames = config['epoch_num_frames']
-    args.feature_arch = config['feature_arch']
+
     args.learning_rate = config['learning_rate']
     args.num_classes = config['num_classes']
     args.num_epochs = config['num_epochs']
@@ -50,11 +50,25 @@ def update_args(args, config):
     args.only_test = config['only_test']
     args.device = config['device']
     args.num_workers = config['num_workers']
-    args.temp_aggregation = config['temp_aggregation']
+
+    # Auxiliary task
+    args.aux_weight = config['aux_weight']
+
+    # Feature aggregation
+    args.clip_aggregation = config['clip_aggregation']
     args.attention_heads = config['attention_heads']
     args.transformer_depth = config['transformer_depth']
     args.transformer_dropout = config['transformer_dropout']
     args.transformer_mlp_dim = config['transformer_mlp_dim']
+
+    # Encoder
+    args.encoder_arch = config['encoder_arch']
+    args.train_last_n_blocks = config.get('train_last_n_blocks', -1)
+
+    # Current experiment
+    args.experiment_name = build_experiment_name(args)
+    args.run_dir = os.path.join(args.save_dir, args.experiment_name)
+    args.ckpt_dir = os.path.join(args.run_dir, "checkpoints")
 
     return args
 
@@ -76,15 +90,12 @@ def main(args):
     np.random.seed(args.seed)
     random.seed(args.seed)
 
-    config_path = 'config/' + args.model + '.json'
-    default_config = load_json('config/default.json')
-    model_config = load_json(config_path)
-    config = {**default_config, **model_config}
+    config = load_json(args.config)
     args = update_args(args, config)
 
     # Directory for storing / reading model checkpoints
-    ckpt_dir = os.path.join(args.save_dir, 'checkpoints')
-    os.makedirs(ckpt_dir, exist_ok=True)
+    os.makedirs(args.ckpt_dir, exist_ok=True)
+    os.makedirs(args.run_dir, exist_ok=True)
 
     # Get datasets train, validation (and validation for map -> Video dataset)
     classes, train_data, val_data, test_data = get_datasets(args)
@@ -128,7 +139,7 @@ def main(args):
         best_criterion = -float('inf')
         epoch = 0
 
-        print(f'START TRAINING EPOCHS. Model {args.model}')
+        print(f'START TRAINING EPOCHS. Experiment {args.experiment_name}')
         for epoch in range(epoch, num_epochs):
 
             train_loss = model.epoch(
@@ -151,18 +162,24 @@ def main(args):
                 print('New best mAP epoch!')
 
             losses.append({
-                'epoch': epoch, 'train': train_loss, 'val': val_loss
+                'epoch': epoch, 
+                'train_loss': float(train_loss),
+                'val_loss': float(val_loss),
+                'val_map': float(val_map),
+                'is_best': better
             })
 
             if args.save_dir is not None:
                 os.makedirs(args.save_dir, exist_ok=True)
-                store_json(os.path.join(args.save_dir, 'loss.json'), losses, pretty=True)
+                store_json(os.path.join(args.run_dir, 'history.json'), losses, pretty=True)
 
                 if better:
-                    torch.save( model.state_dict(), os.path.join(ckpt_dir, 'checkpoint_best.pt') )
+                    torch.save(model.state_dict(), os.path.join(args.ckpt_dir, 'checkpoint_best.pt'))
 
     print('\nSTART INFERENCE')
-    model.load(torch.load(os.path.join(ckpt_dir, 'checkpoint_best.pt')))
+    ckpt_path = os.path.join(args.ckpt_dir, 'checkpoint_best.pt')
+    map_location = 'cuda' if torch.cuda.is_available() and args.device == 'cuda' else 'cpu'
+    model.load(torch.load(ckpt_path, map_location=map_location))
 
     # Evaluation on test split
     ap_score = evaluate(model, test_data)
@@ -190,7 +207,7 @@ def main(args):
     # Report model stats
     print('\nMODEL STATS\n')
     headers = ["Model", "Params", "MACs"]
-    model_table = [[args.model, params, macs]]
+    model_table = [[args.experiment_name, params, macs]]
     print(tabulate(model_table, headers, tablefmt="grid"))
 
     print('\nEXECUTION CORRECTLY FINISHED')

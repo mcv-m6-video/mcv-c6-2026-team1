@@ -15,69 +15,21 @@ import torch.nn.functional as F
 from thop import profile, clever_format
 
 #Local imports
-from model.modules import BaseRGBModel, FCLayers, step
+from model.modules import (
+    BaseRGBModel, 
+    FCLayers, 
+    step,
+    TemporalMaxPool,
+    TemporalTransformer,
+    set_trainable_backbone
+    )
 
-
-# Temporal operations
-class TransformerLayer(nn.Module):
-    def __init__(self, embed_dim, num_heads, attn_dropout, mlp_dim):
-        super().__init__()
-        self.multi_head = nn.MultiheadAttention(
-            embed_dim=embed_dim,
-            num_heads=num_heads,
-            dropout=attn_dropout,
-            batch_first=True
-        )
-        self.mlp = nn.Sequential(
-            nn.Linear(embed_dim, mlp_dim),
-            nn.ReLU(),
-            nn.Linear(mlp_dim, embed_dim)
-        )
-        self.norm1 = nn.LayerNorm(embed_dim)
-        self.norm2 = nn.LayerNorm(embed_dim)
-
-    def forward(self, x):
-        attn_out, _ = self.multi_head(
-            self.norm1(x), self.norm1(x), self.norm1(x)
-        )
-        x = x + attn_out
-        x = x + self.mlp(self.norm2(x))
-        return x
-
-
-class TemporalTransformer(nn.Module):
-    def __init__(self, seq_len, embed_dim, num_heads, depth, attn_dropout, mlp_dim):
-        super().__init__()
-        self.temporal_embed = nn.Parameter(torch.randn(1, seq_len + 1, embed_dim))
-        self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim))
-
-        self.transformer_blocks = nn.ModuleList([
-            TransformerLayer(embed_dim, num_heads, attn_dropout, mlp_dim)
-            for _ in range(depth)
-        ])
-
-    def forward(self, x):
-        B, T, D = x.shape
-
-        cls_tokens = self.cls_token.expand(B, -1, -1)   # (B, 1, D)
-        x = torch.cat((cls_tokens, x), dim=1)           # (B, T+1, D)
-        x = x + self.temporal_embed[:, :T+1, :]
-
-        for block in self.transformer_blocks:
-            x = block(x)
-
-        return x[:, 0]
     
-
-class TemporalMaxPool(nn.Module):
-    def forward(self, x):
-        return torch.max(x, dim=1)[0]
-    
-
+# Merge latents vectors in time dimension
 def build_temporal_module(args, embed_dim):
-    if args.temp_aggregation.lower() == "max":
+    if args.clip_aggregation.lower() == "max":
         return TemporalMaxPool()
-    if args.temp_aggregation.lower() == "transformer":
+    if args.clip_aggregation.lower() == "transformer":
         return TemporalTransformer(
             seq_len=args.clip_len,
             embed_dim=embed_dim,
@@ -87,23 +39,41 @@ def build_temporal_module(args, embed_dim):
             mlp_dim=args.transformer_mlp_dim
         )
     
-    raise NotImplementedError(args.temp_aggregation)
+    raise NotImplementedError(args.clip_aggregation)
 
 # Backbone
-def build_backbone(feature_arch):
-    if feature_arch.startswith(('rny002', 'rny004', 'rny008')):
+def build_backbone(encoder_arch):
+    resize = False
+    if encoder_arch.startswith(('rny002', 'rny004', 'rny008')):
         model_name = {
             'rny002': 'regnety_002',
             'rny004': 'regnety_004',
             'rny008': 'regnety_008',
-        }[feature_arch.rsplit('_', 1)[0]]
+        }[encoder_arch.rsplit('_', 1)[0]]
 
-        features = timm.create_model(model_name, pretrained=True)
-        feat_dim = features.head.fc.in_features
-        features.head.fc = nn.Identity()
-        return features, feat_dim
+        features = timm.create_model(model_name, pretrained=True, num_classes=0)
+        feat_dim = features.num_features
+        return features, feat_dim, resize
 
-    raise NotImplementedError(feature_arch)
+    vit_backbones = {
+        'vit_tiny_patch16_224': 'vit_tiny_patch16_224',
+        'vit_small_patch16_224': 'vit_small_patch16_224',
+        'vit_base_patch16_224': 'vit_base_patch16_224',
+    }
+
+    if encoder_arch in vit_backbones:
+        model_name = vit_backbones[encoder_arch]
+
+        features = timm.create_model(
+            model_name,
+            pretrained=True,
+            num_classes=0  # outputs final embedding
+        )
+        feat_dim = features.num_features
+        resize = True
+        return features, feat_dim, resize
+
+    raise NotImplementedError(encoder_arch)
 
 
 class Model(BaseRGBModel):
@@ -112,10 +82,14 @@ class Model(BaseRGBModel):
         def __init__(self, args = None):
             super().__init__()
             self.args = args
-            self._feature_arch = self.args.feature_arch
+            self._encoder_arch = self.args.encoder_arch
 
             # Build backone
-            self._features, self._d = build_backbone(self._feature_arch)
+            self._features, self._d, self._needs_resize = build_backbone(self._encoder_arch)
+            set_trainable_backbone(
+                self._features,
+                train_last_n_blocks=getattr(self.args, 'train_last_n_blocks', -1)
+            )
 
             # How to aggregate latents
             self.temporal_module = build_temporal_module(
@@ -136,10 +110,16 @@ class Model(BaseRGBModel):
                 T.RandomHorizontalFlip(),
             ])
 
-            #Standarization
-            self.standarization = T.Compose([
-                T.Normalize(mean = (0.485, 0.456, 0.406), std = (0.229, 0.224, 0.225)) #Imagenet mean and std
-            ])
+            if self._needs_resize:
+                self.resize = T.Resize((224, 224), antialias=True)
+            else:
+                self.resize = nn.Identity()
+
+            # Standarization (both Timm models need the same ImageNet standarization)
+            self.standarization = T.Normalize(
+                mean=(0.485, 0.456, 0.406),
+                std=(0.229, 0.224, 0.225)
+            )
 
             self.aux_weight = getattr(self.args, 'aux_weight', 0.1)
             self.use_auxiliary = self.aux_weight != 0
@@ -149,6 +129,12 @@ class Model(BaseRGBModel):
             else:
                 self._aux_event_head = None
 
+            # Control how many params the model have
+            total_params = sum(p.numel() for p in self.parameters())
+            trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+            print(f"[Model] total params: {total_params:,}")
+            print(f"[Model] trainable params: {trainable_params:,}")
+
         def forward(self, x):
             x = self.normalize(x) #Normalize to 0-1
             batch_size, clip_len, channels, height, width = x.shape #B, T, C, H, W
@@ -156,12 +142,15 @@ class Model(BaseRGBModel):
             if self.training:
                 x = self.augment(x) #augmentation per-batch
 
-            x = self.standarize(x) #standarization imagenet stats
-                        
-            im_feat = self._features(
-                x.view(-1, channels, height, width)
-            ).reshape(batch_size, clip_len, self._d) #B, T, D
+            # Flatten clip dimension so resize / normalize work on images
+            x = x.view(-1, channels, height, width)  # (B*T, C, H, W)
 
+            # Resize only when needed (ViT)
+            x = self.resize(x)
+
+            x = self.standarize(x) # standarization imagenet stats
+                        
+            im_feat = self._features(x).reshape(batch_size, clip_len, self._d) #B, T, D
 
             aux_event_logits = None
             if self.use_auxiliary:
@@ -188,13 +177,11 @@ class Model(BaseRGBModel):
             return x
 
         def standarize(self, x):
-            for i in range(x.shape[0]):
-                x[i] = self.standarization(x[i])
-            return x
+            return self.standarization(x)
 
     def __init__(self, args=None):
         self.device = "cpu"
-        if torch.cuda.is_available() and ("device" in args) and (args.device == "cuda"):
+        if torch.cuda.is_available() and hasattr(args, 'device') and args.device == "cuda":
             self.device = "cuda"
 
         self._model = Model.Impl(args=args)
@@ -209,10 +196,8 @@ class Model(BaseRGBModel):
     def epoch(self, loader, optimizer=None, scaler=None, lr_scheduler=None):
 
         if optimizer is None:
-            inference = True
             self._model.eval()
         else:
-            inference = False
             optimizer.zero_grad()
             self._model.train()
 
