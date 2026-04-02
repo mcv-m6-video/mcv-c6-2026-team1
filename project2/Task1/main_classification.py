@@ -45,8 +45,13 @@ def update_args(args, config):
     args.clip_len = config['clip_len']
     args.dataset = config['dataset']
     args.epoch_num_frames = config['epoch_num_frames']
+    args.early_stopping_patience = config.get("early_stopping_patience", 100)
 
-    args.learning_rate = config['learning_rate']
+    # Learning rates
+    args.encoder_learning_rate = config['encoder_learning_rate']
+    args.temporal_learning_rate = config['temporal_learning_rate']
+    args.aux_learning_rate = config['aux_learning_rate']
+
     args.num_classes = config['num_classes']
     args.num_epochs = config['num_epochs']
     args.warm_up_epochs = config['warm_up_epochs']
@@ -157,7 +162,30 @@ def main(args):
     # Model
     model = Model(args=args)
 
-    optimizer, scaler = model.get_optimizer({'lr': args.learning_rate})
+    # Get optimzer and scaler
+    param_groups = [
+        {
+            "params": [p for p in model._model._features.parameters() if p.requires_grad],
+            "lr": args.encoder_learning_rate,
+        },
+        {
+            "params": [p for p in model._model.temporal_module.parameters() if p.requires_grad],
+            "lr": args.temporal_learning_rate,
+        },
+        {
+            "params": [p for p in model._model._fc.parameters() if p.requires_grad],
+            "lr": args.temporal_learning_rate,
+        }
+    ]
+
+    if model.use_auxiliary and model._model._aux_event_head is not None:
+        param_groups.append({
+            "params": [p for p in model._model._aux_event_head.parameters() if p.requires_grad],
+            "lr": args.aux_learning_rate,
+        })
+
+    optimizer = torch.optim.AdamW(param_groups, weight_decay=5e-4) 
+    scaler = torch.cuda.amp.GradScaler() if model.device == "cuda" else None
 
     if not args.only_test:
         # Warmup schedule
@@ -168,6 +196,7 @@ def main(args):
         losses = []
         best_criterion = -float('inf')
         epoch = 0
+        patience_counter = 0
 
         print(f'START TRAINING EPOCHS. Experiment {args.experiment_name}')
         for epoch in range(epoch, num_epochs):
@@ -184,7 +213,11 @@ def main(args):
             if val_ap10 > best_criterion:
                 best_criterion = val_ap10
                 better = True
-            
+                patience_counter = 0
+
+            else:
+                patience_counter += 1
+
             #Printing info epoch
             print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f} Val AP10: {:0.2f}'.format(
                 epoch, train_loss, val_loss, val_ap10 * 100))
@@ -205,6 +238,10 @@ def main(args):
 
                 if better:
                     torch.save(model.state_dict(), os.path.join(args.ckpt_dir, 'checkpoint_best.pt'))
+
+            if patience_counter >= args.early_stopping_patience:
+                print(f"Early stopping at epoch {epoch+1}")
+                break
 
     print('\nSTART INFERENCE')
     ckpt_path = os.path.join(args.ckpt_dir, 'checkpoint_best.pt')

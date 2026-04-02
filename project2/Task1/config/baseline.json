@@ -9,7 +9,6 @@
     "stride": 2,
     "dataset": "soccernetball",
     "epoch_num_frames": 500000,
-    "learning_rate": 0.0008,
     "num_classes": 12,
     "warm_up_epochs": 3,
     "only_test": true,
@@ -20,9 +19,11 @@
 
     "_comment1": "Set aux_weight to 0 to disable auxiliary task.",
     "aux_weight": 0,
+    "aux_learning_rate": 0.0008,
 
     "_comment2": "Approach to aggregate each frame feature within a clip.",
     "clip_aggregation": "max",
+    "temporal_learning_rate": 0.0008,
     "attention_heads": 4,
     "transformer_depth": 2,
     "transformer_dropout": 0.1,
@@ -30,5 +31,6 @@
 
     "_comment3": "Use CNN or ViT approach for encoder (vit_base_patch16_224 or rny002)",
     "encoder_arch": "rny002",
-    "train_last_n_blocks": -1
+    "train_last_n_blocks": -1,
+    "encoder_learning_rate": 0.0008
 }

@@ -9,8 +9,10 @@ def build_experiment_name(args):
         "clip_aggregation": args.clip_aggregation,
         "clip_len": args.clip_len,
         "batch_size": args.batch_size,
-        "learning_rate": args.learning_rate,
+        "encoder_lr": args.encoder_learning_rate,
+        "temporal_learning_rate": args.temporal_learning_rate,
         "aux_weight": args.aux_weight,
+        "aux_lr": args.aux_learning_rate,
         "seed": args.seed,
     }
 
@@ -29,8 +31,10 @@ def build_experiment_name(args):
     readable_name = (
         f"{args.encoder_arch}_"
         f"{args.clip_aggregation}_"
-        f"lr{args.learning_rate}_"
+        f"enc_lr{args.encoder_learning_rate}_"
+        f"agg_lr{args.temporal_learning_rate}_"
         f"aux{args.aux_weight}_"
+        f"aux_lr{args.aux_learning_rate}_"
         f"seed{args.seed}_"
         f"train_n_layers{args.train_last_n_blocks}_"
     )

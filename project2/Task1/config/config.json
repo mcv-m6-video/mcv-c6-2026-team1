@@ -9,26 +9,29 @@
     "stride": 2,
     "dataset": "soccernetball",
     "epoch_num_frames": 500000,
-    "learning_rate": 0.0008,
     "num_classes": 12,
     "warm_up_epochs": 3,
-    "only_test": true,
+    "only_test": false,
     "qualitatives": true,
     "device": "cuda",
     "num_workers": 4,
-    "num_epochs": 25,
+    "num_epochs": 15,
+    "early_stopping_patience": 6,
 
     "_comment1": "Set aux_weight to 0 to disable auxiliary task.",
     "aux_weight": 0,
+    "aux_learning_rate": 1e-4,
 
     "_comment2": "Approach to aggregate each frame feature within a clip.",
     "clip_aggregation": "transformer",
+    "temporal_learning_rate": 1e-4,
     "attention_heads": 4,
     "transformer_depth": 2,
     "transformer_dropout": 0.1,
     "transformer_mlp_dim": 850,
 
-    "_comment3": "Use CNN or ViT approach for encoder (vit_base_patch16_224 or rny002)",
-    "encoder_arch": "rny002",
-    "train_last_n_blocks": 2
+    "_comment3": "Use CNN or ViT approach for encoder (vit_base_patch16_224, rny002, eva02_small, convnextv2_tiny....)",
+    "encoder_arch": "vit_base_patch16_224",
+    "train_last_n_blocks": 3,
+    "encoder_learning_rate": 5e-5
 }
