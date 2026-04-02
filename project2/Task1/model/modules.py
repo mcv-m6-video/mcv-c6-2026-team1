@@ -13,10 +13,6 @@ import math
 class ABCModel:
 
     @abc.abstractmethod
-    def get_optimizer(self, opt_args):
-        raise NotImplementedError()
-
-    @abc.abstractmethod
     def epoch(self, loader, **kwargs):
         raise NotImplementedError()
 
@@ -33,11 +29,6 @@ class ABCModel:
         raise NotImplementedError()
 
 class BaseRGBModel(ABCModel):
-
-    def get_optimizer(self, opt_args):
-        return torch.optim.AdamW(self._get_params(), **opt_args), \
-            torch.cuda.amp.GradScaler() if self.device == 'cuda' else None
-
     """ Assume there is a self._model """
 
     def _get_params(self):
@@ -55,7 +46,6 @@ class BaseRGBModel(ABCModel):
             self._model.load_state_dict(state_dict)    
 
 class FCLayers(nn.Module):
-
     def __init__(self, feat_dim, num_classes):
         super().__init__()
         self._fc_out = nn.Linear(feat_dim, num_classes)
@@ -69,28 +59,46 @@ class FCLayers(nn.Module):
         elif len(x.shape) == 2:
             return self._fc_out(self.dropout(x))
 
-class TransformerLayer(nn.Module):
-    def __init__(self, embed_dim, num_heads, attn_dropout, mlp_dim):
+
+class MLP(nn.Module):
+    def __init__(self, embed_dim, mlp_dim, dropout):
         super().__init__()
-        self.multi_head = nn.MultiheadAttention(
-            embed_dim=embed_dim,
-            num_heads=num_heads,
-            dropout=attn_dropout,
-            batch_first=True
-        )
-        self.mlp = nn.Sequential(
+        self.net = nn.Sequential(
             nn.Linear(embed_dim, mlp_dim),
             nn.ReLU(),
             nn.Linear(mlp_dim, embed_dim)
         )
-        self.norm1 = nn.LayerNorm(embed_dim)
-        self.norm2 = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
-        attn_out, _ = self.multi_head(
-            self.norm1(x), self.norm1(x), self.norm1(x)
+        return self.net(x)
+    
+
+class TransformerLayer(nn.Module):
+    def __init__(
+        self,
+        embed_dim,
+        num_heads,
+        attn_dropout,
+        mlp_dim,
+        proj_dropout=0.1
+    ):
+        super().__init__()
+
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.attn = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            dropout=attn_dropout,
+            batch_first=True,
         )
-        x = x + attn_out
+
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.mlp = MLP(embed_dim, mlp_dim, dropout=proj_dropout)
+
+
+    def forward(self, x):
+        y, _ = self.attn(self.norm1(x), self.norm1(x), self.norm1(x))
+        x = x + y
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -99,6 +107,7 @@ class TemporalTransformer(nn.Module):
         super().__init__()
         self.temporal_embed = nn.Parameter(torch.randn(1, seq_len + 1, embed_dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim))
+        self.norm = nn.LayerNorm(embed_dim)
 
         self.transformer_blocks = nn.ModuleList([
             TransformerLayer(embed_dim, num_heads, attn_dropout, mlp_dim)
@@ -115,21 +124,19 @@ class TemporalTransformer(nn.Module):
         for block in self.transformer_blocks:
             x = block(x)
 
+        #x = self.norm(x)
         return x[:, 0]
     
 class TemporalMaxPool(nn.Module):
     def forward(self, x):
         return torch.max(x, dim=1)[0]
 
-def step(optimizer, scaler, loss, lr_scheduler=None):
+def step(optimizer, scaler, loss, lr_scheduler=None, max_grad_norm=1.0):
     if scaler is None:
         loss.backward()
-    else:
-        scaler.scale(loss).backward()
-
-    if scaler is None:
         optimizer.step()
     else:
+        scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
     if lr_scheduler is not None:
