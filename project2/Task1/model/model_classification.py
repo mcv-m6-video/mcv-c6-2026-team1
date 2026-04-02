@@ -1,8 +1,6 @@
 """
 File containing the main model.
 """
-
-#Standard imports
 import torch
 from torch import nn
 import timm
@@ -11,10 +9,8 @@ from contextlib import nullcontext
 from tqdm import tqdm
 import torch.nn.functional as F
 
-# Computational reporting
 from thop import profile, clever_format
 
-#Local imports
 from model.modules import (
     BaseRGBModel, 
     FCLayers, 
@@ -43,37 +39,37 @@ def build_temporal_module(args, embed_dim):
 
 # Backbone
 def build_backbone(encoder_arch):
-    resize = False
-    if encoder_arch.startswith(('rny002', 'rny004', 'rny008')):
-        model_name = {
-            'rny002': 'regnety_002',
-            'rny004': 'regnety_004',
-            'rny008': 'regnety_008',
-        }[encoder_arch.rsplit('_', 1)[0]]
+    #resize = None
+    backbone_map = {
+        # RegNetY
+        'rny002': 'regnety_002',
+        'rny004': 'regnety_004',
+        'rny008': 'regnety_008',
 
-        features = timm.create_model(model_name, pretrained=True, num_classes=0)
-        feat_dim = features.num_features
-        return features, feat_dim, resize
-
-    vit_backbones = {
+        # ViT
         'vit_tiny_patch16_224': 'vit_tiny_patch16_224',
         'vit_small_patch16_224': 'vit_small_patch16_224',
         'vit_base_patch16_224': 'vit_base_patch16_224',
+
+        # New backbones
+        'eva02_small': 'eva02_small_patch14_224.mim_in22k',
+        'convnextv2_tiny': 'convnextv2_tiny.fcmae_ft_in22k_in1k',
     }
 
-    if encoder_arch in vit_backbones:
-        model_name = vit_backbones[encoder_arch]
+    if encoder_arch not in backbone_map:
+        raise NotImplementedError(encoder_arch)
+    
+    model_name = backbone_map[encoder_arch]
+    features = timm.create_model(
+        model_name,
+        pretrained=True,
+        num_classes=0
+    )
 
-        features = timm.create_model(
-            model_name,
-            pretrained=True,
-            num_classes=0  # outputs final embedding
-        )
-        feat_dim = features.num_features
-        resize = True
-        return features, feat_dim, resize
+    feat_dim = features.num_features
+    data_config = timm.data.resolve_model_data_config(features)
 
-    raise NotImplementedError(encoder_arch)
+    return features, feat_dim, data_config
 
 
 class Model(BaseRGBModel):
@@ -85,7 +81,7 @@ class Model(BaseRGBModel):
             self._encoder_arch = self.args.encoder_arch
 
             # Build backone
-            self._features, self._d, self._needs_resize = build_backbone(self._encoder_arch)
+            self._features, self._d, self._data_config = build_backbone(self._encoder_arch)
             set_trainable_backbone(
                 self._features,
                 train_last_n_blocks=getattr(self.args, 'train_last_n_blocks', -1)
@@ -102,24 +98,20 @@ class Model(BaseRGBModel):
 
             #Augmentations and crop
             self.augmentation = T.Compose([
-                T.RandomApply([T.ColorJitter(hue = 0.2)], p = 0.25),
+                # T.RandomApply([T.ColorJitter(hue = 0.2)], p = 0.25),
                 T.RandomApply([T.ColorJitter(saturation = (0.7, 1.2))], p = 0.25),
                 T.RandomApply([T.ColorJitter(brightness = (0.7, 1.2))], p = 0.25),
                 T.RandomApply([T.ColorJitter(contrast = (0.7, 1.2))], p = 0.25),
-                T.RandomApply([T.GaussianBlur(5)], p = 0.25),
+                # T.RandomApply([T.GaussianBlur(5)], p = 0.25),
                 T.RandomHorizontalFlip(),
             ])
 
-            if self._needs_resize:
-                self.resize = T.Resize((224, 224), antialias=True)
-            else:
-                self.resize = nn.Identity()
+            input_size = self._data_config["input_size"]   # (C, H, W)
+            mean = self._data_config["mean"]
+            std = self._data_config["std"]
 
-            # Standarization (both Timm models need the same ImageNet standarization)
-            self.standarization = T.Normalize(
-                mean=(0.485, 0.456, 0.406),
-                std=(0.229, 0.224, 0.225)
-            )
+            self.resize = T.Resize(input_size[1:], antialias=True)
+            self.standarization = T.Normalize(mean=mean, std=std)
 
             self.aux_weight = getattr(self.args, 'aux_weight', 0.1)
             self.use_auxiliary = self.aux_weight != 0
@@ -143,7 +135,7 @@ class Model(BaseRGBModel):
                 x = self.augment(x) #augmentation per-batch
 
             # Flatten clip dimension so resize / normalize work on images
-            x = x.view(-1, channels, height, width)  # (B*T, C, H, W)
+            x = x.reshape(-1, channels, height, width)  # (B*T, C, H, W)
 
             # Resize only when needed (ViT)
             x = self.resize(x)
