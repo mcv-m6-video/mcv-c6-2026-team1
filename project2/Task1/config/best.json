@@ -11,7 +11,7 @@
     "epoch_num_frames": 500000,
     "num_classes": 12,
     "warm_up_epochs": 3,
-    "only_test": false,
+    "only_test": true,
     "qualitatives": true,
     "device": "cuda",
     "num_workers": 4,

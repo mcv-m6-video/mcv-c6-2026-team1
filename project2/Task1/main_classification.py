@@ -18,7 +18,6 @@ from tabulate import tabulate
 #Local imports
 from util.io import load_json, store_json, save_video
 from util.eval_classification import evaluate
-from util.experiment import build_experiment_name
 from dataset.datasets import get_datasets
 from model.model_classification import Model
 
@@ -74,10 +73,8 @@ def update_args(args, config):
     args.encoder_arch = config['encoder_arch']
     args.train_last_n_blocks = config.get('train_last_n_blocks', -1)
 
-    # Current experiment
-    args.experiment_name = build_experiment_name(args)
-    args.run_dir = os.path.join(args.save_dir, args.experiment_name)
-    args.ckpt_dir = os.path.join(args.run_dir, "checkpoints")
+    # Current run directory
+    args.run_dir = os.path.join(args.save_dir, args.model)
 
     return args
 
@@ -103,8 +100,7 @@ def main(args):
     config = load_json(config_path)
     args = update_args(args, config)
 
-    # Directory for storing / reading model checkpoints
-    os.makedirs(args.ckpt_dir, exist_ok=True)
+    # Directory for storing / reading model data
     os.makedirs(args.run_dir, exist_ok=True)
 
     # Get datasets train, validation (and validation for map -> Video dataset)
@@ -135,9 +131,7 @@ def main(args):
         store_json(stats_path, stats, pretty=True)
         print(f"Dataset statistics saved to {stats_path}")
 
-        end_message = 'Re-run changing "mode" to "load" in the config JSON for training/inference.'
-        print(end_message)
-        sys.exit(end_message)
+        sys.exit('Re-run changing "mode" to "load" in the config JSON for training/inference.')
     else:
         print('Datasets have been loaded from previous versions correctly!')
 
@@ -198,7 +192,7 @@ def main(args):
         epoch = 0
         patience_counter = 0
 
-        print(f'START TRAINING EPOCHS. Experiment {args.experiment_name}')
+        print(f'START TRAINING EPOCHS. Experiment {args.model}')
         for epoch in range(epoch, num_epochs):
 
             train_loss = model.epoch(
@@ -237,14 +231,14 @@ def main(args):
                 store_json(os.path.join(args.run_dir, 'history.json'), losses, pretty=True)
 
                 if better:
-                    torch.save(model.state_dict(), os.path.join(args.ckpt_dir, 'checkpoint_best.pt'))
+                    torch.save(model.state_dict(), os.path.join(args.run_dir, 'checkpoint_best.pt'))
 
             if patience_counter >= args.early_stopping_patience:
                 print(f"Early stopping at epoch {epoch+1}")
                 break
 
     print('\nSTART INFERENCE')
-    ckpt_path = os.path.join(args.ckpt_dir, 'checkpoint_best.pt')
+    ckpt_path = os.path.join(args.run_dir, 'checkpoint_best.pt')
     map_location = 'cuda' if torch.cuda.is_available() and args.device == 'cuda' else 'cpu'
     model.load(torch.load(ckpt_path, map_location=map_location))
 
@@ -286,7 +280,7 @@ def main(args):
     # Report model stats
     print('\nMODEL STATS\n')
     headers = ["Model", "Params", "MACs"]
-    model_table = [[args.experiment_name, params, macs]]
+    model_table = [[args.model, params, macs]]
     print(tabulate(model_table, headers, tablefmt="grid"))
 
     if args.qualitatives:
