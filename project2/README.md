@@ -14,7 +14,7 @@ conda activate c6-project2-team1
 
 ## Getting the dataset and data preparation
 
-Refer to the README files in the [data/soccernetball](/data/soccernetball) directories within each task folder for instructions on how to download the SN-BAS-2025 dataset, preparation of directories, and extraction of the video frames. We prepared the script **`get_data.sh`** to process everything directly, but you will need the password to unzip the data splits.
+Refer to the README files in the `data/soccernetball` directory within each task folder for instructions on how to download the SN-BAS-2025 dataset, preparation of directories, and extraction of the video frames. We prepared the script **`get_data.sh`** to process everything directly, but you will need the password to unzip the data splits.
 
 ## Project Structure
 
