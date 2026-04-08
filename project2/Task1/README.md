@@ -7,7 +7,7 @@ Instructions on running the classification baseline and our best model are detai
 
 ## Running the code
 
-The `main_classification.py` is designed to train and evaluate the baseline using the settings specified in a configuration file. You can run `main_classification.py` using the following command:
+`main_classification.py` is designed to train and evaluate the baseline using the settings specified in a configuration file. You can run `main_classification.py` using the following command:
 
 ```
 python main_classification.py --model <model_name>
