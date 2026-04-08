@@ -200,7 +200,7 @@ def main(args):
                 lr_scheduler=lr_scheduler)
             
             val_loss = model.epoch(val_loader)
-            val_ap_score = evaluate(model, val_data)
+            val_ap_score = evaluate(model, val_data)[0]
             val_ap10 = np.mean(val_ap_score[:10])
 
             better = False
