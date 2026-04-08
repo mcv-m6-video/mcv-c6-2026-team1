@@ -23,7 +23,7 @@ For additional details on configuration options using the configuration file, re
 
 ## Running our best model
 
-First, weights must be downloaded. Modify `SAVE_DIR` within `get_best_weights.sh` so that it points to your save directory (the same used in the [config](./config/) files). Then, run the following script:
+First, weights must be downloaded. Modify `SAVE_DIR` within `get_best_weights.sh` so that it points to your save directory (the same used in the [config](./config/) files). Then, run the script:
 
 ```
 ./get_best_weights.sh
