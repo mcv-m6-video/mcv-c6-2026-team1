@@ -2,9 +2,9 @@
     "frame_dir": "./../SoccerNet/SN-BAS-2025-FRAMES/398x224",
     "save_dir": "./../SoccerNet/SN-BAS-2025-SAVE_DIR",
     "labels_dir": "./../SoccerNet/SN-BAS-2025",
-    "store_mode": "store",
+    "store_mode": "load",
     "task": "spotting",
-    "batch_size": 4,
+    "batch_size": 16,
     "clip_len": 50,
     "stride": 2,
     "dataset": "soccernetball",
@@ -14,7 +14,8 @@
     "num_classes": 12,
     "num_epochs": 20,
     "warm_up_epochs": 3,
-    "only_test": false,
+    "only_test": true,
+    "qualitatives": true,
     "device": "cuda",
     "num_workers": 4
 }

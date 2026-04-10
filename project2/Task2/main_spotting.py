@@ -16,11 +16,12 @@ from torch.utils.data import DataLoader, RandomSampler
 from tabulate import tabulate
 
 #Local imports
-from util.io import load_json, store_json
+from util.io import load_json, store_json, save_video
 from util.eval_spotting import evaluate, generate_qualitative_results
 from dataset.datasets import get_datasets
 from model.model_spotting import Model
 
+BACKGROUND_LABEL = "BACKGROUND"
 
 def get_args():
     #Basic arguments
@@ -47,6 +48,7 @@ def update_args(args, config):
     args.num_epochs = config['num_epochs']
     args.warm_up_epochs = config['warm_up_epochs']
     args.only_test = config['only_test']
+    args.qualitatives = config['qualitatives']
     args.device = config['device']
     args.num_workers = config['num_workers']
 
@@ -84,8 +86,35 @@ def main(args):
     classes, train_data, val_data, test_data = get_datasets(args)
 
     if args.store_mode == 'store':
-        print('Datasets have been stored correctly! Re-run changing "mode" to "load" in the config JSON.')
-        sys.exit('Datasets have correctly been stored! Stop training here and rerun with load mode.')
+        print('Datasets have been stored correctly!')
+        print('Generating dataset statistics...')
+        stats = {}
+        for split_name, split in [("train", train_data), ("val", val_data), ("test", test_data)]:
+            counts = {name: 0 for name in classes.keys()}
+            counts[BACKGROUND_LABEL] = 0
+            total_frames = 0
+            for video in split._games:
+                labels_file = load_json(os.path.join(split._labels_dir, video['video'] + '/Labels-ball.json'))['annotations']
+                num_frames = int(video['num_frames'])
+                action_frames = 0
+                for event in labels_file:
+                    counts[event['label']] += 1
+                    action_frames += 1
+                        
+                counts[BACKGROUND_LABEL] += num_frames - action_frames
+                total_frames += num_frames
+            
+            stats[split_name] = {
+                "total_frames": total_frames,
+                "counts": counts
+            }
+            
+        # Save the dictionary to JSON
+        stats_path = os.path.join(args.save_dir, 'dataset_statistics.json')
+        store_json(stats_path, stats, pretty=True)
+        print(f"Dataset statistics saved to {stats_path}")
+
+        sys.exit('Re-run changing "mode" to "load" in the config JSON for training/inference.')
     else:
         print('Datasets have been loaded from previous versions correctly!')
 
@@ -183,7 +212,25 @@ def main(args):
     model_table = [[args.model, params, macs]]
     print(tabulate(model_table, headers, tablefmt="grid"))
 
-    # generate_qualitative_results(model, test_data)
+    if args.qualitatives:
+        print('\nGenerating qualitative results...')
+        qualitative_results = generate_qualitative_results(model, test_data, BACKGROUND_LABEL, args.labels_dir)
+        qualitative_dir = os.path.join(args.run_dir, 'qualitative_results')
+        os.makedirs(qualitative_dir, exist_ok=True)
+        
+        json_dump = []
+        for idx, result in enumerate(qualitative_results):
+            video_path = os.path.join(qualitative_dir, f"sample_{idx}.mp4")
+            save_video(video_path, result["frames"])
+            json_dump.append({
+                "path": video_path,
+                "video": result["video"],
+                "start": result["start"],
+                "end": result["end"],
+            })
+            
+        json_path = os.path.join(qualitative_dir, 'qualitative.json')
+        store_json(json_path, json_dump, pretty=True)
     
     print('\nEXECUTION CORRECTLY FINISHED')
 

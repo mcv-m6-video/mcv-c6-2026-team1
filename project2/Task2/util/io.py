@@ -1,5 +1,5 @@
 import json
-
+import cv2
 
 def load_json(fpath):
     with open(fpath) as fp:
@@ -21,3 +21,11 @@ def store_json(fpath, obj, pretty=False):
         kwargs['sort_keys'] = True
     with open(fpath, 'w') as fp:
         json.dump(obj, fp, **kwargs)
+
+def save_video(output_path, frames, fps=5):
+    h, w = frames[0].shape[:2]
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out_video = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+    for frame in frames:
+        out_video.write(frame)
+    out_video.release() # Release the writer object
