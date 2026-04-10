@@ -12,12 +12,12 @@ import random
 from torch.optim.lr_scheduler import (
     ChainedScheduler, LinearLR, CosineAnnealingLR)
 import sys
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 from tabulate import tabulate
 
 #Local imports
 from util.io import load_json, store_json
-from util.eval_spotting import evaluate
+from util.eval_spotting import evaluate, generate_qualitative_results
 from dataset.datasets import get_datasets
 from model.model_spotting import Model
 
@@ -32,8 +32,8 @@ def get_args():
 def update_args(args, config):
     #Update arguments with config file
     args.frame_dir = config['frame_dir']
-    args.save_dir = config['save_dir'] + '/' + args.model # + '-' + str(args.seed) -> in case multiple seeds
-    args.store_dir = config['save_dir'] + '/' + "splits"
+    args.save_dir = config['save_dir']
+    args.store_dir = os.path.join(config['save_dir'], "splits")
     args.labels_dir = config['labels_dir']
     args.store_mode = config['store_mode']
     args.task = config['task']
@@ -49,6 +49,9 @@ def update_args(args, config):
     args.only_test = config['only_test']
     args.device = config['device']
     args.num_workers = config['num_workers']
+
+    # Run directory
+    args.run_dir = os.path.join(args.save_dir, args.model)
 
     return args
 
@@ -74,9 +77,8 @@ def main(args):
     config = load_json(config_path)
     args = update_args(args, config)
 
-    # Directory for storing / reading model checkpoints
-    ckpt_dir = os.path.join(args.save_dir, 'checkpoints')
-    os.makedirs(ckpt_dir, exist_ok=True)
+    # Directory for storing / reading model data
+    os.makedirs(args.run_dir, exist_ok=True)
 
     # Get datasets train, validation (and validation for map -> Video dataset)
     classes, train_data, val_data, test_data = get_datasets(args)
@@ -87,22 +89,19 @@ def main(args):
     else:
         print('Datasets have been loaded from previous versions correctly!')
 
-    def worker_init_fn(id):
-        random.seed(id + epoch * 100)
-
     # Dataloaders
+    clips_per_epoch = args.epoch_num_frames // args.clip_len
+    train_sampler = RandomSampler(train_data, replacement=True, num_samples=clips_per_epoch)
     train_loader = DataLoader(
-        train_data, shuffle=False, batch_size=args.batch_size,
+        train_data, sampler=train_sampler, batch_size=args.batch_size, 
         pin_memory=True, num_workers=args.num_workers,
-        prefetch_factor=(2 if args.num_workers > 0 else None),
-        worker_init_fn=worker_init_fn
+        prefetch_factor=(2 if args.num_workers > 0 else None)
     )
         
     val_loader = DataLoader(
         val_data, shuffle=False, batch_size=args.batch_size,
         pin_memory=True, num_workers=args.num_workers,
-        prefetch_factor=(2 if args.num_workers > 0 else None),
-        worker_init_fn=worker_init_fn
+        prefetch_factor=(2 if args.num_workers > 0 else None)
     )
 
     # Model
@@ -120,7 +119,7 @@ def main(args):
         best_criterion = float('inf')
         epoch = 0
 
-        print('START TRAINING EPOCHS')
+        print(f'START TRAINING EPOCHS ({args.model})')
         for epoch in range(epoch, num_epochs):
 
             train_loss = model.epoch(
@@ -138,7 +137,7 @@ def main(args):
             print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f}'.format(
                 epoch, train_loss, val_loss))
             if better:
-                print('New best mAP epoch!')
+                print('New best epoch!')
 
             losses.append({
                 'epoch': epoch, 'train': train_loss, 'val': val_loss
@@ -146,32 +145,47 @@ def main(args):
 
             if args.save_dir is not None:
                 os.makedirs(args.save_dir, exist_ok=True)
-                store_json(os.path.join(args.save_dir, 'loss.json'), losses, pretty=True)
+                store_json(os.path.join(args.run_dir, 'loss.json'), losses, pretty=True)
 
                 if better:
-                    torch.save( model.state_dict(), os.path.join(ckpt_dir, 'checkpoint_best.pt') )
+                    torch.save(model.state_dict(), os.path.join(args.run_dir, 'checkpoint_best.pt') )
 
-    print('START INFERENCE')
-    model.load(torch.load(os.path.join(ckpt_dir, 'checkpoint_best.pt')))
+    print('\nSTART INFERENCE')
+    model.load(torch.load(os.path.join(args.run_dir, 'checkpoint_best.pt')))
 
     # Evaluation on test split
-    map_score, ap_score = evaluate(model, test_data, nms_window = 5)
+    map_score, ap_score = evaluate(model, test_data)
+
+    # Model stats
+    macs, params = model.get_stats()
 
     # Report results per-class in table
+    print('\nPER-CLASS METRICS\n')
     table = []
     for i, class_name in enumerate(classes.keys()):
         table.append([class_name, f"{ap_score[i]*100:.2f}"])
-
     headers = ["Class", "Average Precision"]
     print(tabulate(table, headers, tablefmt="grid"))
 
     # Report average results in table
-    avg_table = [["Mean", f"{map_score*100:.2f}"]]
-    headers = ["", "Average Precision"]
-
+    print('\nEVALUATION SUMMARY\n')
+    headers = ["Metric", "Score"]
+    avg_table = [
+        ["AP10", f"{np.mean(ap_score[:10])*100:.2f}"],
+        ["AP12", f"{np.mean(ap_score)*100:.2f}"],
+        ["SoccerNet mAP", f"{map_score*100:.2f}"]
+    ]
     print(tabulate(avg_table, headers, tablefmt="grid"))
+
+    # Report model stats
+    print('\nMODEL STATS\n')
+    headers = ["Model", "Params", "MACs"]
+    model_table = [[args.model, params, macs]]
+    print(tabulate(model_table, headers, tablefmt="grid"))
+
+    # generate_qualitative_results(model, test_data)
     
-    print('CORRECTLY FINISHED TRAINING AND INFERENCE')
+    print('\nEXECUTION CORRECTLY FINISHED')
 
 
 if __name__ == '__main__':

@@ -34,7 +34,6 @@ class ActionSpotDataset(Dataset):
             store_dir,                  # path to store files (with frames path and labels per clip)
             store_mode,                 # 'store' or 'load'
             clip_len,                   # Number of frames per clip
-            dataset_len,                # Number of clips
             stride=1,                   # Downsample frame rate
             overlap=1,                  # Overlap between clips (in proportion to clip_len)
             pad_len=DEFAULT_PAD_LEN,    # Number of frames to pad the start
@@ -73,11 +72,6 @@ class ActionSpotDataset(Dataset):
             self._store_clips()
         elif self._store_mode == 'load':
             self._load_clips()
-
-        if dataset_len is None:
-            self._dataset_len = len(self._frame_paths)
-        else:
-            self._dataset_len = dataset_len
 
         self._total_len = len(self._frame_paths)
 
@@ -137,10 +131,7 @@ class ActionSpotDataset(Dataset):
         print('Loaded clips from ' + store_path)
         return
 
-    def _get_one(self):
-        #Get random index
-        idx = random.randint(0, self._total_len - 1)
-
+    def __getitem__(self, idx):
         #Get frame_path and labels dict
         frames_path = self._frame_paths[idx]
         dict_label = self._labels_store[idx]      
@@ -162,13 +153,8 @@ class ActionSpotDataset(Dataset):
         return {'frame': frames, 'contains_event': int(np.sum(labels) > 0),
                 'label': labels}
 
-    def __getitem__(self, unused):
-        ret = self._get_one()
-
-        return ret
-
     def __len__(self):
-        return self._dataset_len
+        return self._total_len
 
     def print_info(self):
         _print_info_helper(self._src_file, self._games)

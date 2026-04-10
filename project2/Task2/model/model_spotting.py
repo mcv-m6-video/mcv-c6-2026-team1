@@ -11,6 +11,7 @@ from contextlib import nullcontext
 from tqdm import tqdm
 import torch.nn.functional as F
 
+from thop import profile, clever_format
 
 #Local imports
 from model.modules import BaseRGBModel, FCLayers, step
@@ -89,17 +90,12 @@ class Model(BaseRGBModel):
                 x[i] = self.standarization(x[i])
             return x
 
-        def print_stats(self):
-            print('Model params:',
-                sum(p.numel() for p in self.parameters()))
-
     def __init__(self, args=None):
         self.device = "cpu"
         if torch.cuda.is_available() and ("device" in args) and (args.device == "cuda"):
             self.device = "cuda"
 
         self._model = Model.Impl(args=args)
-        self._model.print_stats()
         self._args = args
 
         self._model.to(self.device)
@@ -108,10 +104,8 @@ class Model(BaseRGBModel):
     def epoch(self, loader, optimizer=None, scaler=None, lr_scheduler=None):
 
         if optimizer is None:
-            inference = True
             self._model.eval()
         else:
-            inference = False
             optimizer.zero_grad()
             self._model.train()
 
@@ -158,3 +152,12 @@ class Model(BaseRGBModel):
             pred = torch.softmax(pred, dim=-1)
             
             return pred.cpu().numpy()
+
+    def get_stats(self):
+        # Dummy input (shape from arguments)
+        resolution_str = self._args.frame_dir.rstrip('/').split('/')[-1]
+        width, height = map(int, resolution_str.split('x'))
+        dummy_input = torch.randn(1, self._args.clip_len, 3, height, width).to(self.device)
+        
+        # Model parameters and complexity
+        return clever_format(profile(self._model, inputs=(dummy_input, ), verbose=False), "%.2f")
