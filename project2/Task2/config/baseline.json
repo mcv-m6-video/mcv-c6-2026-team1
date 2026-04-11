@@ -17,5 +17,7 @@
     "only_test": true,
     "qualitatives": true,
     "device": "cuda",
-    "num_workers": 4
+    "num_workers": 4,
+    "use_ap10": true,
+    "early_stopping_patience": 6
 }

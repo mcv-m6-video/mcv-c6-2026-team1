@@ -51,6 +51,7 @@ def update_args(args, config):
     args.qualitatives = config['qualitatives']
     args.device = config['device']
     args.num_workers = config['num_workers']
+    args.early_stopping_patience = config["early_stopping_patience"]
 
     # Bets model criterion
     args.use_ap10 = config["use_ap10"]
@@ -150,6 +151,7 @@ def main(args):
         losses = []
         best_criterion = -float('inf') if args.use_ap10 else float("inf")
         epoch = 0
+        patience_counter = 0
 
         print(f'START TRAINING EPOCHS ({args.model})')
         for epoch in range(epoch, num_epochs):
@@ -167,6 +169,10 @@ def main(args):
             if criterion_value < best_criterion:
                 best_criterion = criterion_value
                 better = True
+                patience_counter = 0
+
+            else:
+                patience_counter += 1
             
             #Printing info epoch
             print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f} mAP10: {:0.5f}'.format(
@@ -184,6 +190,10 @@ def main(args):
 
                 if better:
                     torch.save(model.state_dict(), os.path.join(args.run_dir, 'checkpoint_best.pt') )
+
+            if patience_counter >= args.early_stopping_patience:
+                print(f"Early stopping at epoch {epoch+1}")
+                break
 
     print('\nSTART INFERENCE')
     model.load(torch.load(os.path.join(args.run_dir, 'checkpoint_best.pt')))
