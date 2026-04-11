@@ -52,6 +52,9 @@ def update_args(args, config):
     args.device = config['device']
     args.num_workers = config['num_workers']
 
+    # Bets model criterion
+    args.use_ap10 = config["use_ap10"]
+
     # Run directory
     args.run_dir = os.path.join(args.save_dir, args.model)
 
@@ -83,13 +86,13 @@ def main(args):
     os.makedirs(args.run_dir, exist_ok=True)
 
     # Get datasets train, validation (and validation for map -> Video dataset)
-    classes, train_data, val_data, test_data = get_datasets(args)
+    classes, train_data, val_data, val_video_data, test_video_data = get_datasets(args)
 
     if args.store_mode == 'store':
         print('Datasets have been stored correctly!')
         print('Generating dataset statistics...')
         stats = {}
-        for split_name, split in [("train", train_data), ("val", val_data), ("test", test_data)]:
+        for split_name, split in [("train", train_data), ("val", val_data), ("test", test_video_data)]:
             counts = {name: 0 for name in classes.keys()}
             counts[BACKGROUND_LABEL] = 0
             total_frames = 0
@@ -145,7 +148,7 @@ def main(args):
             args, optimizer, num_steps_per_epoch)
         
         losses = []
-        best_criterion = float('inf')
+        best_criterion = -float('inf') if args.use_ap10 else float("inf")
         epoch = 0
 
         print(f'START TRAINING EPOCHS ({args.model})')
@@ -156,20 +159,23 @@ def main(args):
                 lr_scheduler=lr_scheduler)
             
             val_loss = model.epoch(val_loader)
+            map_score, ap_score = evaluate(model, val_video_data)
+            val_ap10 = np.mean(ap_score[:10]) # Leave out free kick and goal
+            criterion_value = val_ap10 if args.use_ap10 else val_loss
 
             better = False
-            if val_loss < best_criterion:
-                best_criterion = val_loss
+            if criterion_value < best_criterion:
+                best_criterion = criterion_value
                 better = True
             
             #Printing info epoch
-            print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f}'.format(
-                epoch, train_loss, val_loss))
+            print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f} mAP10: {:0.5f}'.format(
+                epoch, train_loss, val_loss, val_ap10))
             if better:
                 print('New best epoch!')
 
             losses.append({
-                'epoch': epoch, 'train': train_loss, 'val': val_loss
+                'epoch': epoch, 'train': train_loss, 'val': val_loss, 'mAP10': val_ap10
             })
 
             if args.save_dir is not None:
@@ -183,7 +189,7 @@ def main(args):
     model.load(torch.load(os.path.join(args.run_dir, 'checkpoint_best.pt')))
 
     # Evaluation on test split
-    map_score, ap_score = evaluate(model, test_data)
+    map_score, ap_score = evaluate(model, test_video_data)
 
     # Model stats
     macs, params = model.get_stats()
@@ -214,7 +220,7 @@ def main(args):
 
     if args.qualitatives:
         print('\nGenerating qualitative results...')
-        qualitative_results = generate_qualitative_results(model, test_data, BACKGROUND_LABEL, args.labels_dir)
+        qualitative_results = generate_qualitative_results(model, test_video_data, BACKGROUND_LABEL, args.labels_dir)
         qualitative_dir = os.path.join(args.run_dir, 'qualitative_results')
         os.makedirs(qualitative_dir, exist_ok=True)
         
