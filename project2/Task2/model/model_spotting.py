@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from thop import profile, clever_format
 
 #Local imports
-from model.modules import BaseRGBModel, FCLayers, step
+from model.modules import BaseRGBModel, FCLayers, FocalLoss, step
 
 class Model(BaseRGBModel):
 
@@ -101,6 +101,19 @@ class Model(BaseRGBModel):
         self._model.to(self.device)
         self._num_classes = args.num_classes
 
+        # Define loss
+        self.class_weights = torch.tensor([1.0] + [5.0] * (self._num_classes), dtype=torch.float32).to(self.device)
+        if args.use_focal_loss:
+            self.criterion = FocalLoss(
+                alpha=self.class_weights,
+                gamma=args.gamma
+            )
+        else:
+            self.criterion = nn.CrossEntropyLoss(
+                weight=self.class_weights,
+                reduction="mean"
+            )
+
     def epoch(self, loader, optimizer=None, scaler=None, lr_scheduler=None):
 
         if optimizer is None:
@@ -108,8 +121,6 @@ class Model(BaseRGBModel):
         else:
             optimizer.zero_grad()
             self._model.train()
-
-        weights = torch.tensor([1.0] + [5.0] * (self._num_classes), dtype=torch.float32).to(self.device)
 
         epoch_loss = 0.
         with torch.no_grad() if optimizer is None else nullcontext():
@@ -122,8 +133,7 @@ class Model(BaseRGBModel):
                     pred = self._model(frame)
                     pred = pred.view(-1, self._num_classes + 1) # B*T, num_classes
                     label = label.view(-1) # B*T
-                    loss = F.cross_entropy(
-                            pred, label, reduction='mean', weight = weights)
+                    loss = self.criterion(pred, label)
 
                 if optimizer is not None:
                     step(optimizer, scaler, loss,

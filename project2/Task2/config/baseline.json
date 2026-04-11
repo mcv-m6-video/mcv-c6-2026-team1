@@ -19,5 +19,7 @@
     "device": "cuda",
     "num_workers": 4,
     "use_ap10": false,
-    "early_stopping_patience": 0
+    "early_stopping_patience": 0,
+    "use_focal_loss": false,
+    "gamma": 2.0
 }

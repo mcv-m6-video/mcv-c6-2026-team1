@@ -56,6 +56,10 @@ def update_args(args, config):
     # Bets model criterion
     args.use_ap10 = config["use_ap10"]
 
+    # Focal Loss
+    args.use_focal_loss = config["use_focal_loss"]
+    args.gamma = config["gamma"]
+
     # Run directory
     args.run_dir = os.path.join(args.save_dir, args.model)
 

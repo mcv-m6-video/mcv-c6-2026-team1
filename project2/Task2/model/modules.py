@@ -6,7 +6,7 @@ File containing the different modules related to the model: T-DEED.
 import abc
 import torch
 import torch.nn as nn
-import math
+import torch.nn.functional as F
 
 #Local imports
 
@@ -83,3 +83,25 @@ def step(optimizer, scaler, loss, lr_scheduler=None):
     if lr_scheduler is not None:
         lr_scheduler.step()
     optimizer.zero_grad()
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=None, gamma=2.0):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def forward(self, logits, targets):
+        targets = targets.long()
+
+        log_probs = F.log_softmax(logits, dim=1)                     
+        log_pt = log_probs.gather(1, targets.unsqueeze(1)).squeeze(1) 
+        pt = log_pt.exp()                                             
+
+        loss = -((1 - pt) ** self.gamma) * log_pt
+
+        if self.alpha is not None:
+            alpha = self.alpha.to(logits.device)
+            alpha_t = alpha[targets]
+            loss = alpha_t * loss
+
+        return loss.mean()
