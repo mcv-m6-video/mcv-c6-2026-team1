@@ -105,3 +105,72 @@ class FocalLoss(nn.Module):
             loss = alpha_t * loss
 
         return loss.mean()
+    
+class MLP(nn.Module):
+    def __init__(self, embed_dim, mlp_dim, dropout):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(embed_dim, mlp_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(mlp_dim, embed_dim),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+    
+class TransformerLayer(nn.Module):
+    def __init__(
+        self,
+        embed_dim,
+        num_heads,
+        attn_dropout,
+        mlp_dim,
+        proj_dropout
+    ):
+        super().__init__()
+
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.attn = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            dropout=attn_dropout,
+            batch_first=True,
+        )
+
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.mlp = MLP(embed_dim, mlp_dim, dropout=proj_dropout)
+
+        self.drop_path_attn = nn.Dropout(proj_dropout)
+        self.drop_path_mlp = nn.Dropout(proj_dropout)
+
+    def forward(self, x):
+        z = self.norm1(x)
+        y, _ = self.attn(z,z,z)
+        x = x + self.drop_path_attn(y)
+        x = x + self.drop_path_mlp(self.mlp(self.norm2(x)))
+        return x
+
+class TemporalTransformer(nn.Module):
+    def __init__(self, clip_len, embed_dim, num_heads, depth, attn_dropout, mlp_dim, proj_dropout):
+        super().__init__()
+
+        assert embed_dim % num_heads == 0
+        self.temporal_embed = nn.Parameter(torch.randn(1, clip_len, embed_dim))
+        self.norm = nn.LayerNorm(embed_dim)
+
+        self.transformer_blocks = nn.ModuleList([
+            TransformerLayer(embed_dim, num_heads, attn_dropout, mlp_dim, proj_dropout)
+            for _ in range(depth)
+        ])
+
+    def forward(self, x):
+        B, T, D = x.shape
+        x = x + self.temporal_embed[:, :T, :]
+
+        for block in self.transformer_blocks:
+            x = block(x)
+
+        x = self.norm(x)
+        return x

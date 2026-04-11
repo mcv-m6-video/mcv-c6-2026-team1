@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from thop import profile, clever_format
 
 #Local imports
-from model.modules import BaseRGBModel, FCLayers, FocalLoss, step
+from model.modules import BaseRGBModel, FCLayers, FocalLoss, TemporalTransformer, step
 
 class Model(BaseRGBModel):
 
@@ -22,7 +22,8 @@ class Model(BaseRGBModel):
 
         def __init__(self, args = None):
             super().__init__()
-            self._feature_arch = args.feature_arch
+            self.args = args
+            self._feature_arch = self.args.feature_arch
 
             if self._feature_arch.startswith(('rny002', 'rny004', 'rny008')):
                 features = timm.create_model({
@@ -37,12 +38,24 @@ class Model(BaseRGBModel):
                 self._d = feat_dim
 
             else:
-                raise NotImplementedError(args._feature_arch)
+                raise NotImplementedError(self.args._feature_arch)
 
             self._features = features
 
+            # Temporal transformer
+            if self.args.use_temporal_transformer:
+                self._temporal_transformer = TemporalTransformer(
+                    clip_len = self.args.clip_len,
+                    embed_dim = self._d,
+                    num_heads=args.attention_heads,
+                    depth=args.transformer_depth,
+                    attn_dropout=args.transformer_dropout,
+                    mlp_dim=args.transformer_mlp_dim,
+                    proj_dropout=args.proj_dropout
+                )
+
             # MLP for classification
-            self._fc = FCLayers(self._d, args.num_classes+1) # +1 for background class (we now perform per-frame classification with softmax, therefore we have the extra background class)
+            self._fc = FCLayers(self._d, self.args.num_classes+1) # +1 for background class (we now perform per-frame classification with softmax, therefore we have the extra background class)
 
             #Augmentations and crop
             self.augmentation = T.Compose([
@@ -71,6 +84,10 @@ class Model(BaseRGBModel):
             im_feat = self._features(
                 x.view(-1, channels, height, width)
             ).reshape(batch_size, clip_len, self._d) #B, T, D
+
+            # Apply transformer to encode temporality
+            if self.args.use_temporal_transformer:
+                im_feat = self._temporal_transformer(im_feat)
 
             #MLP
             im_feat = self._fc(im_feat) #B, T, num_classes+1
