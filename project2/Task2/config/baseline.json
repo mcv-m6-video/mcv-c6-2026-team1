@@ -18,6 +18,6 @@
     "qualitatives": true,
     "device": "cuda",
     "num_workers": 4,
-    "use_ap10": true,
-    "early_stopping_patience": 6
+    "use_ap10": false,
+    "early_stopping_patience": 0
 }
