@@ -51,6 +51,7 @@ def update_args(args, config):
     args.qualitatives = config['qualitatives']
     args.device = config['device']
     args.num_workers = config['num_workers']
+    args.use_early_stopping = config["use_early_stopping"]
     args.early_stopping_patience = config["early_stopping_patience"]
 
     # Bets model criterion
@@ -202,9 +203,10 @@ def main(args):
                 if better:
                     torch.save(model.state_dict(), os.path.join(args.run_dir, 'checkpoint_best.pt') )
 
-            if patience_counter >= args.early_stopping_patience:
-                print(f"Early stopping at epoch {epoch+1}")
-                break
+            if args.use_early_stopping:
+                if patience_counter >= args.early_stopping_patience:
+                    print(f"Early stopping at epoch {epoch+1}")
+                    break
 
     print('\nSTART INFERENCE')
     model.load(torch.load(os.path.join(args.run_dir, 'checkpoint_best.pt')))
