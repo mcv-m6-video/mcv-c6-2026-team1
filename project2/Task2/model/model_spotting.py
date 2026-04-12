@@ -125,7 +125,7 @@ class Model(BaseRGBModel):
         if args.class_weights_type == "stats":
             stats = load_json(os.path.join(args.save_dir, 'dataset_statistics.json'))
             train_counts = stats["train"]["counts"]
-            self.class_weights = build_class_weights(train_counts)
+            self.class_weights = build_class_weights(train_counts).to(self.device)
         elif args.class_weights_type == "hardcoded":
             self.class_weights = torch.tensor([1.0] + [5.0] * (self._num_classes), dtype=torch.float32).to(self.device)
         else:
