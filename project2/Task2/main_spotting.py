@@ -166,7 +166,7 @@ def main(args):
         patience_counter = 0
 
         print(f'START TRAINING EPOCHS ({args.model})')
-        for epoch in range(epoch, num_epochs):
+        for epoch in range(num_epochs):
 
             train_loss = model.epoch(
                 train_loader, optimizer, scaler,
@@ -175,30 +175,29 @@ def main(args):
             val_loss = model.epoch(val_loader)
             map_score, ap_score = evaluate(model, val_video_data)
             val_ap10 = np.mean(ap_score[:10]) # Leave out free kick and goal
-            criterion_value = val_ap10 if args.use_ap10 else val_loss
 
-            better = False
-            if criterion_value < best_criterion:
+            criterion_value = val_ap10 if args.use_ap10 else val_loss
+            better = (val_ap10 > best_criterion) if args.use_ap10 else (val_loss < best_criterion)
+            if better:
                 best_criterion = criterion_value
-                better = True
                 patience_counter = 0
 
             else:
                 patience_counter += 1
             
             #Printing info epoch
-            print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f} mAP10: {:0.5f}'.format(
+            print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f} AP10: {:0.5f}'.format(
                 epoch, train_loss, val_loss, val_ap10))
             if better:
                 print('New best epoch!')
 
             losses.append({
-                'epoch': epoch, 'train': train_loss, 'val': val_loss, 'mAP10': val_ap10
+                'epoch': epoch, 'train': train_loss, 'val': val_loss, 'AP10': val_ap10
             })
 
             if args.save_dir is not None:
                 os.makedirs(args.save_dir, exist_ok=True)
-                store_json(os.path.join(args.run_dir, 'loss.json'), losses, pretty=True)
+                store_json(os.path.join(args.run_dir, 'history.json'), losses, pretty=True)
 
                 if better:
                     torch.save(model.state_dict(), os.path.join(args.run_dir, 'checkpoint_best.pt') )
