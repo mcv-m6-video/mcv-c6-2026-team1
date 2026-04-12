@@ -150,6 +150,31 @@ class Model(BaseRGBModel):
                     pred = self._model(frame)
                     pred = pred.view(-1, self._num_classes + 1) # B*T, num_classes
                     label = label.view(-1) # B*T
+
+                    if self._args.oversample_actions:
+                        pos_mask = label != 0
+                        neg_mask = label == 0
+
+                        pos_idx = torch.where(pos_mask)[0]
+                        neg_idx = torch.where(neg_mask)[0]
+
+                        num_pos = pos_idx.numel()
+
+                        if num_pos > 0:
+                            neg_ratio = self._args.oversampling_ratio
+                            num_neg_keep = min(neg_ratio * num_pos, neg_idx.numel())
+                            perm = torch.randperm(neg_idx.numel(), device=neg_idx.device)[:num_neg_keep]
+                            neg_idx = neg_idx[perm]
+                            keep_idx = torch.cat([pos_idx, neg_idx], dim=0)
+                        else:
+                            # fallback
+                            num_neg_keep = min(256, neg_idx.numel())
+                            perm = torch.randperm(neg_idx.numel(), device=neg_idx.device)[:num_neg_keep]
+                            keep_idx = neg_idx[perm]
+
+                        pred = pred[keep_idx]
+                        label = label[keep_idx]
+
                     loss = self.criterion(pred, label)
 
                 if optimizer is not None:

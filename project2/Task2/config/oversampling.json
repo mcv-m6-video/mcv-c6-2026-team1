@@ -23,7 +23,7 @@
     "early_stopping_patience": 6,
     "use_focal_loss": false,
     "gamma": 2.0,
-    "oversample_actions": false,
+    "oversample_actions": true,
     "oversampling_ratio": 3,
     "use_temporal_transformer": false,
     "attention_heads": 4,

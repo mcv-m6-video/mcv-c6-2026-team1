@@ -54,6 +54,10 @@ def update_args(args, config):
     args.use_early_stopping = config["use_early_stopping"]
     args.early_stopping_patience = config["early_stopping_patience"]
 
+    # Oversampling action frames vs background
+    args.oversample_actions = config["oversample_actions"]
+    args.oversampling_ratio = config["oversampling_ratio"]
+
     # Bets model criterion
     args.use_ap10 = config["use_ap10"]
 
