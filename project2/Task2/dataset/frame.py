@@ -40,7 +40,8 @@ class ActionSpotDataset(Dataset):
                                         # and end of videos
             dataset = 'soccernetball',     # Dataset name
             labels_dir = None,          # Directory with labels for SoccerNetBall
-            task = 'classification'     # Classification or localization
+            task = 'classification',    # Classification or localization,
+            label_radius = 0            # Expand frame labels to nearby frames (+ tolerance)
     ):
         self._src_file = game_file
         self._games = load_json(game_file)
@@ -63,6 +64,8 @@ class ActionSpotDataset(Dataset):
         self._labels_dir = labels_dir
         self._task = task
         assert task in ['classification', 'spotting']
+        self._label_radius = label_radius
+        assert label_radius >= 0
 
         #Frame reader class
         self._frame_reader = FrameReader(frame_dir, dataset = dataset)
@@ -144,6 +147,18 @@ class ActionSpotDataset(Dataset):
             labels = np.zeros(self._clip_len, np.int64)
             for label in dict_label:
                 labels[label['label_idx']] = label['label']
+
+            # Add temporal tolerance (if label_radius > 0)
+            for label in dict_label:
+                center = label['label_idx']
+                cls = label['label']
+
+                left = max(0, center - self._label_radius)
+                right = min(self._clip_len, center + self._label_radius + 1)
+
+                for t in range(left, right):
+                    if labels[t] == 0:
+                        labels[t] = cls
 
         elif self._task == 'classification':
             labels = np.zeros(len(self._class_dict), np.int64) #C classes

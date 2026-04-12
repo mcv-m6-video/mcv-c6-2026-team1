@@ -58,8 +58,14 @@ def update_args(args, config):
     args.oversample_actions = config["oversample_actions"]
     args.oversampling_ratio = config["oversampling_ratio"]
 
+    # Temporal tolerance in training
+    args.label_radius = config["label_radius"]
+
     # Bets model criterion
     args.use_ap10 = config["use_ap10"]
+
+    # Weights to use for the loss
+    args.class_weights_type = config["class_weights_type"]
 
     # Focal Loss
     args.use_focal_loss = config["use_focal_loss"]

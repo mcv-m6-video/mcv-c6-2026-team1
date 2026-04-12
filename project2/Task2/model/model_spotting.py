@@ -3,6 +3,7 @@ File containing the main model.
 """
 
 #Standard imports
+import os
 import torch
 from torch import nn
 import timm
@@ -15,6 +16,9 @@ from thop import profile, clever_format
 
 #Local imports
 from model.modules import BaseRGBModel, FCLayers, FocalLoss, TemporalTransformer, step
+from util.loss_weigths import build_class_weights
+from util.io import load_json
+
 
 class Model(BaseRGBModel):
 
@@ -118,8 +122,15 @@ class Model(BaseRGBModel):
         self._model.to(self.device)
         self._num_classes = args.num_classes
 
-        # Define loss
-        self.class_weights = torch.tensor([1.0] + [5.0] * (self._num_classes), dtype=torch.float32).to(self.device)
+        if args.class_weights_type == "stats":
+            stats = load_json(os.path.join(args.save_dir, 'dataset_statistics.json'))
+            train_counts = stats["train"]["counts"]
+            self.class_weights = build_class_weights(train_counts)
+        elif args.class_weights_type == "hardcoded":
+            self.class_weights = torch.tensor([1.0] + [5.0] * (self._num_classes), dtype=torch.float32).to(self.device)
+        else:
+            self.class_weights = torch.tensor([1.0] + [1.0] * (self._num_classes), dtype=torch.float32).to(self.device)
+
         if args.use_focal_loss:
             self.criterion = FocalLoss(
                 alpha=self.class_weights,
