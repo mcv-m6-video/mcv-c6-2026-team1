@@ -200,18 +200,17 @@ def main(args):
             if better:
                 best_criterion = criterion_value
                 patience_counter = 0
-
             else:
                 patience_counter += 1
             
             #Printing info epoch
-            print('[Epoch {}] Train loss: {:0.5f} Val loss: {:0.5f} AP10: {:0.5f}'.format(
-                epoch, train_loss, val_loss, val_ap10))
+            print('[Epoch {}] Train loss: {:0.5f} Val criterion: {:0.5f}'.format(
+                epoch, train_loss, criterion_value))
             if better:
                 print('New best epoch!')
 
             losses.append({
-                'epoch': epoch, 'train': train_loss, 'val': val_loss, 'AP10': val_ap10
+                'epoch': epoch, 'train_loss': train_loss, 'val_criterion': criterion_value
             })
 
             if args.save_dir is not None:
