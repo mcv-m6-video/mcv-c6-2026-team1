@@ -39,7 +39,8 @@ class Model(BaseRGBModel):
 
                 # Remove final classification layer
                 features.head.fc = nn.Identity()
-                self._d = feat_dim
+                self._backbone_dim = feat_dim
+                self._head_dim = feat_dim
 
             else:
                 raise NotImplementedError(self.args._feature_arch)
@@ -50,7 +51,7 @@ class Model(BaseRGBModel):
             if self.args.temporal_model == "transformer":
                 self._temporal_model = TemporalTransformer(
                     clip_len = self.args.clip_len,
-                    embed_dim = self._d,
+                    embed_dim = self._backbone_dim,
                     num_heads=args.attention_heads,
                     depth=args.transformer_depth,
                     attn_dropout=args.transformer_dropout,
@@ -60,15 +61,16 @@ class Model(BaseRGBModel):
 
             elif self.args.temporal_model == "gru":
                 self._temporal_model = TemporalGRU(
-                    embed_dim=self._d,
+                    embed_dim=self._backbone_dim,
                     hidden_dim=args.gru_hidden_dim,
                     num_layers=args.gru_layers,
                     dropout=args.gru_dropout,
                     bidirectional=args.gru_bidirectional
                 )
+                self._head_dim = self._temporal_model.out_dim
 
             # MLP for classification
-            self._fc = FCLayers(self._d, self.args.num_classes+1) # +1 for background class (we now perform per-frame classification with softmax, therefore we have the extra background class)
+            self._fc = FCLayers(self._head_dim, self.args.num_classes+1) # +1 for background class (we now perform per-frame classification with softmax, therefore we have the extra background class)
 
             #Augmentations and crop
             self.augmentation = T.Compose([
@@ -96,7 +98,7 @@ class Model(BaseRGBModel):
                         
             im_feat = self._features(
                 x.view(-1, channels, height, width)
-            ).reshape(batch_size, clip_len, self._d) #B, T, D
+            ).reshape(batch_size, clip_len, self._backbone_dim) #B, T, D
 
             # Apply model to encode temporality
             if self.args.temporal_model in ["transformer", "gru"]:
