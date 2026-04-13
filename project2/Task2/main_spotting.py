@@ -183,12 +183,14 @@ def main(args):
                 train_loader, optimizer, scaler,
                 lr_scheduler=lr_scheduler)
             
-            val_loss = model.epoch(val_loader)
-            map_score, ap_score = evaluate(model, val_video_data)
-            val_ap10 = np.mean(ap_score[:10]) # Leave out free kick and goal
+            if args.use_ap10:
+                map_score, ap_score = evaluate(model, val_video_data)
+                criterion_value = np.mean(ap_score[:10]) # Leave out free kick and goal
+                better = criterion_value > best_criterion
+            else:
+                criterion_value = model.epoch(val_loader)
+                better = criterion_value < best_criterion
 
-            criterion_value = val_ap10 if args.use_ap10 else val_loss
-            better = (val_ap10 > best_criterion) if args.use_ap10 else (val_loss < best_criterion)
             if better:
                 best_criterion = criterion_value
                 patience_counter = 0
