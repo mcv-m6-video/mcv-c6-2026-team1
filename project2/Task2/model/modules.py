@@ -34,9 +34,27 @@ class ABCModel:
 
 class BaseRGBModel(ABCModel):
 
-    def get_optimizer(self, opt_args):
-        return torch.optim.AdamW(self._get_params(), **opt_args), \
-            torch.cuda.amp.GradScaler() if self.device == 'cuda' else None
+    def get_optimizer(self):
+        param_groups = [
+            {
+                "params": self._model._features.parameters(),
+                "lr": self._args.backbone_learning_rate
+            },
+            {
+                "params": self._model._fc.parameters(),
+                "lr": self._args.head_learning_rate
+            }
+        ]
+
+        if hasattr(self._model, "_temporal_model"):
+            param_groups.append({
+                "params": self._model._temporal_model.parameters(),
+                "lr": self._args.temporal_learning_rate
+            })
+
+        optimizer = torch.optim.AdamW(param_groups)
+        scaler = torch.cuda.amp.GradScaler() if self.device == 'cuda' else None
+        return optimizer, scaler
 
     """ Assume there is a self._model """
 

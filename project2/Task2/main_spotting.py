@@ -43,7 +43,6 @@ def update_args(args, config):
     args.dataset = config['dataset']
     args.epoch_num_frames = config['epoch_num_frames']
     args.feature_arch = config['feature_arch']
-    args.learning_rate = config['learning_rate']
     args.num_classes = config['num_classes']
     args.num_epochs = config['num_epochs']
     args.warm_up_epochs = config['warm_up_epochs']
@@ -53,6 +52,11 @@ def update_args(args, config):
     args.num_workers = config['num_workers']
     args.use_early_stopping = config["use_early_stopping"]
     args.early_stopping_patience = config["early_stopping_patience"]
+
+    # LR
+    args.backbone_learning_rate = config["backbone_learning_rate"]
+    args.temporal_learning_rate = config["temporal_learning_rate"]
+    args.head_learning_rate = config["head_learning_rate"]
 
     # Oversampling action frames vs background
     args.oversample_actions = config["oversample_actions"]
@@ -169,7 +173,7 @@ def main(args):
     # Model
     model = Model(args=args)
 
-    optimizer, scaler = model.get_optimizer({'lr': args.learning_rate})
+    optimizer, scaler = model.get_optimizer()
 
     if not args.only_test:
         # Warmup schedule
