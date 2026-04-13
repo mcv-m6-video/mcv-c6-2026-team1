@@ -71,13 +71,19 @@ def update_args(args, config):
     args.use_focal_loss = config["use_focal_loss"]
     args.gamma = config["gamma"]
 
+    args.temporal_model = config["temporal_model"]
     # Transformer
-    args.use_temporal_transformer = config["use_temporal_transformer"]
     args.attention_heads = config["attention_heads"]
     args.transformer_depth = config["transformer_depth"]
     args.transformer_dropout = config["transformer_dropout"]
     args.transformer_mlp_dim = config["transformer_mlp_dim"]
     args.proj_dropout = config["proj_dropout"]
+
+    # GRU
+    args.gru_hidden_dim = config["gru_hidden_dim"]
+    args.gru_layers = config["gru_layers"]
+    args.gru_dropout = config["gru_dropout"]
+    args.gru_bidirectional = config["gru_bidirectional"]
 
     # Run directory
     args.run_dir = os.path.join(args.save_dir, args.model)

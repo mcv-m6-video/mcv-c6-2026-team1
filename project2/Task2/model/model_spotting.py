@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from thop import profile, clever_format
 
 #Local imports
-from model.modules import BaseRGBModel, FCLayers, FocalLoss, TemporalTransformer, step
+from model.modules import BaseRGBModel, FCLayers, FocalLoss, TemporalTransformer, TemporalGRU, step
 from util.loss_weigths import build_class_weights
 from util.io import load_json
 
@@ -47,8 +47,8 @@ class Model(BaseRGBModel):
             self._features = features
 
             # Temporal transformer
-            if self.args.use_temporal_transformer:
-                self._temporal_transformer = TemporalTransformer(
+            if self.args.temporal_model == "transformer":
+                self._temporal_model = TemporalTransformer(
                     clip_len = self.args.clip_len,
                     embed_dim = self._d,
                     num_heads=args.attention_heads,
@@ -56,6 +56,15 @@ class Model(BaseRGBModel):
                     attn_dropout=args.transformer_dropout,
                     mlp_dim=args.transformer_mlp_dim,
                     proj_dropout=args.proj_dropout
+                )
+
+            elif self.args.temporal_model == "gru":
+                self._temporal_model = TemporalGRU(
+                    embed_dim=self._d,
+                    hidden_dim=args.gru_hidden_dim,
+                    num_layers=args.gru_layers,
+                    dropout=args.gru_dropout,
+                    bidirectional=args.gru_bidirectional
                 )
 
             # MLP for classification
@@ -89,9 +98,9 @@ class Model(BaseRGBModel):
                 x.view(-1, channels, height, width)
             ).reshape(batch_size, clip_len, self._d) #B, T, D
 
-            # Apply transformer to encode temporality
-            if self.args.use_temporal_transformer:
-                im_feat = self._temporal_transformer(im_feat)
+            # Apply model to encode temporality
+            if self.args.temporal_model in ["transformer", "gru"]:
+                im_feat = self._temporal_model(im_feat)
 
             #MLP
             im_feat = self._fc(im_feat) #B, T, num_classes+1

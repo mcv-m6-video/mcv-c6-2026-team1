@@ -27,10 +27,14 @@
     "oversample_actions": false,
     "oversampling_ratio": 10,
     "label_radius": 0,
-    "use_temporal_transformer": false,
+    "temporal_model": "none",
     "attention_heads": 4,
     "transformer_depth": 2,
     "transformer_dropout": 0.1,
     "transformer_mlp_dim": 500,
-    "proj_dropout": 0.1
+    "proj_dropout": 0.1,
+    "gru_hidden_dim": 368,
+    "gru_layers": 1,
+    "gru_dropout": 0.1,
+    "gru_bidirectional": true
 }

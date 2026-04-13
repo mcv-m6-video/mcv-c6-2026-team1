@@ -174,3 +174,25 @@ class TemporalTransformer(nn.Module):
 
         x = self.norm(x)
         return x
+
+class TemporalGRU(nn.Module):
+    def __init__(self, embed_dim, hidden_dim, num_layers=1, dropout=0.0, bidirectional=False):
+        super().__init__()
+
+        self.bidirectional = bidirectional
+        self.hidden_dim = hidden_dim
+        self.out_dim = hidden_dim * (2 if bidirectional else 1)
+
+        self.gru = nn.GRU(
+            input_size=embed_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0,
+            bidirectional=bidirectional,
+        )
+
+    def forward(self, x):
+        # x: [B, T, D]
+        y, _ = self.gru(x)   # [B, T, out_dim]
+        return y
