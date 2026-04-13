@@ -36,15 +36,19 @@ class Model(BaseRGBModel):
                     'rny008': 'regnety_008',
                 }[self._feature_arch.rsplit('_', 1)[0]], pretrained=True)
                 feat_dim = features.head.fc.in_features
-
-                # Remove final classification layer
                 features.head.fc = nn.Identity()
-                self._backbone_dim = feat_dim
-                self._head_dim = feat_dim
+
+            elif self._feature_arch.startswith('vitbase'):
+                features = timm.create_model('vit_base_patch16_224', pretrained=True)
+
+                feat_dim = features.head.in_features
+                features.head = nn.Identity()
 
             else:
                 raise NotImplementedError(self.args._feature_arch)
 
+            self._backbone_dim = feat_dim
+            self._head_dim = feat_dim
             self._features = features
 
             # Temporal transformer
@@ -84,7 +88,7 @@ class Model(BaseRGBModel):
 
             #Standarization
             self.standarization = T.Compose([
-                T.Normalize(mean = (0.485, 0.456, 0.406), std = (0.229, 0.224, 0.225)) #Imagenet mean and std
+                T.Normalize(mean = (0.485, 0.456, 0.406), std = (0.229, 0.224, 0.225)) # Imagenet mean and std
             ])
 
         def forward(self, x):
@@ -95,10 +99,19 @@ class Model(BaseRGBModel):
                 x = self.augment(x) #augmentation per-batch
 
             x = self.standarize(x) #standarization imagenet stats
-                        
-            im_feat = self._features(
-                x.view(-1, channels, height, width)
-            ).reshape(batch_size, clip_len, self._backbone_dim) #B, T, D
+
+            # Different input shapes -> resize!
+            if self._feature_arch.startswith('vitbase'):
+                x = F.interpolate(
+                    x.view(-1, channels, height, width),
+                    size=(224, 224),
+                    mode='bilinear',
+                    align_corners=False
+                )
+            else:
+                x = x.view(-1, channels, height, width)
+
+            im_feat = self._features(x).reshape(batch_size, clip_len, self._backbone_dim) #B, T, D
 
             # Apply model to encode temporality
             if self.args.temporal_model in ["transformer", "gru"]:
