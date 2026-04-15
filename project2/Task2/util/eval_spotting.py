@@ -192,7 +192,6 @@ def generate_qualitative_results(model, dataset, background_label, videos_dir, b
 
         # Read 720p video from dataset
         video_path = os.path.join(videos_dir, clip['video'], '720p.mp4')
-        print(video_path)
         cap = cv2.VideoCapture(video_path)
         cap.set(cv2.CAP_PROP_POS_FRAMES, clip['start'] * dataset._stride)
 
