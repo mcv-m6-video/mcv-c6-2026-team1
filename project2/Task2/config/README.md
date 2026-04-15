@@ -1,6 +1,6 @@
 # Setting up the Configurations
 
-Here we describe the different parameters set in the baseline configuration file:
+Here we describe the (default) parameters set in the baseline configuration file:
 
 - _frame_dir:_ Directory where frames are stored.
 - _save_dir:_ Directory to save checkpoints, dataset information, etc.

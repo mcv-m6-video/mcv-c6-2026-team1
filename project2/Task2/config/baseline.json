@@ -4,7 +4,7 @@
     "labels_dir": "./../SoccerNet/SN-BAS-2025",
     "store_mode": "load",
     "task": "spotting",
-    "batch_size": 16,
+    "batch_size": 8,
     "clip_len": 50,
     "stride": 2,
     "dataset": "soccernetball",
