@@ -46,9 +46,6 @@ for split, color in colors.items():
         
     ax.grid(axis='y', linestyle='--', alpha=0.7)
     
-    # OPTIONAL: Uncomment the next line if the '0' bar is so huge that it makes the other bars invisible
-    # ax.set_yscale('log') 
-    
     fig.tight_layout()
     plot_filename = os.path.join(SAVE_DIR, f'clip_actions_{split}.png')
     plt.savefig(plot_filename, dpi=300)
