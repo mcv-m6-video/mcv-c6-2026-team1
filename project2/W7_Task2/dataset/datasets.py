@@ -1,9 +1,10 @@
 """
-File containing the function to load all the frame datasets.
+File containing the function to load all the frame datasets (and the DETR collate function).
 """
 
 #Standard imports
 import os
+import torch
 
 #Local imports
 from util.dataset import load_classes
@@ -52,3 +53,10 @@ def get_datasets(args):
     test_video_data.print_info()
         
     return classes, train_data, val_data, val_video_data, test_video_data
+
+def detr_collate_fn(batch):
+    frames = torch.stack([item['frame'] for item in batch])
+    contains_event = torch.tensor([item['contains_event'] for item in batch])
+    labels = [item['label'] for item in batch]
+    targets = [item['target'] for item in batch]
+    return {'frame': frames, 'contains_event': contains_event, 'label': labels, 'target': targets}

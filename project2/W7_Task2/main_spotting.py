@@ -18,7 +18,7 @@ from tabulate import tabulate
 #Local imports
 from util.io import load_json, store_json, save_video
 from util.eval_spotting import evaluate, generate_qualitative_results
-from dataset.datasets import get_datasets
+from dataset.datasets import get_datasets, detr_collate_fn
 from model.model_spotting import Model
 
 BACKGROUND_LABEL = "BACKGROUND"
@@ -161,13 +161,13 @@ def main(args):
     train_loader = DataLoader(
         train_data, sampler=train_sampler, batch_size=args.batch_size, 
         pin_memory=True, num_workers=args.num_workers,
-        prefetch_factor=(2 if args.num_workers > 0 else None)
+        prefetch_factor=(2 if args.num_workers > 0 else None), collate_fn=detr_collate_fn
     )
         
     val_loader = DataLoader(
         val_data, shuffle=False, batch_size=args.batch_size,
         pin_memory=True, num_workers=args.num_workers,
-        prefetch_factor=(2 if args.num_workers > 0 else None)
+        prefetch_factor=(2 if args.num_workers > 0 else None), collate_fn=detr_collate_fn
     )
 
     # Model

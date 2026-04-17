@@ -143,6 +143,7 @@ class ActionSpotDataset(Dataset):
         frames = self._frame_reader.load_frames(frames_path, pad=True, stride=self._stride)
 
         #Process labels
+        """
         if self._task == 'spotting':
             labels = np.zeros(self._clip_len, np.int64)
             for label in dict_label:
@@ -159,7 +160,24 @@ class ActionSpotDataset(Dataset):
                 for t in range(left, right):
                     if labels[t] == 0:
                         labels[t] = cls
+        """
+        if self._task == 'spotting':
+            detr_timestamps = []
+            detr_labels = []
+            for label in dict_label:
+                # Normalize the frame index to a 0.0 - 1.0 timestamp
+                timestamp = label['label_idx'] / self._clip_len
+                detr_timestamps.append(timestamp)
+                detr_labels.append(label['label'])
 
+            # Return dictionary here is different
+            return {
+                'frame': frames, 
+                'contains_event': int(len(detr_labels) > 0), 
+                'label': torch.tensor(detr_labels, dtype=torch.long), 
+                'timestamp': torch.tensor(detr_timestamps, dtype=torch.float32).unsqueeze(1)
+            }
+        
         elif self._task == 'classification':
             labels = np.zeros(len(self._class_dict), np.int64) #C classes
             for label in dict_label:
