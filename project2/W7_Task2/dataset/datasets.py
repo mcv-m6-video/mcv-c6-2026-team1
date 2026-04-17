@@ -39,8 +39,11 @@ def get_datasets(args):
         args.frame_dir, args.store_dir, args.store_mode, args.clip_len, **dataset_kwargs)
     val_data.print_info()     
 
-    # Not needed for testing
-    dataset_kwargs.pop('label_radius', None)
+    # Need test data for clip statistics
+    test_data = ActionSpotDataset(
+        classes, os.path.join('data', args.dataset, 'test.json'),
+        args.frame_dir, args.store_dir, args.store_mode, args.clip_len, **dataset_kwargs)
+    test_data.print_info()    
 
     # Need raw video data to compute mAP10 for validation and testing
     val_video_data = ActionSpotVideoDataset(classes, os.path.join('data', args.dataset, 'val.json'),
@@ -51,7 +54,7 @@ def get_datasets(args):
         args.frame_dir, args.clip_len, **dataset_kwargs)
     test_video_data.print_info()
         
-    return classes, train_data, val_data, val_video_data, test_video_data
+    return classes, train_data, val_data, test_data, val_video_data, test_video_data
 
 def detr_collate_fn(batch):
     frames = torch.stack([item['frame'] for item in batch])

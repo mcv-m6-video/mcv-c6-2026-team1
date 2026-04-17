@@ -95,13 +95,14 @@ def main(args):
     os.makedirs(args.run_dir, exist_ok=True)
 
     # Get datasets train, validation (and validation for map -> Video dataset)
-    classes, train_data, val_data, val_video_data, test_video_data = get_datasets(args)
+    classes, train_data, val_data, test_data, val_video_data, test_video_data = get_datasets(args)
 
     if args.store_mode == 'store':
         print('Datasets have been stored correctly!')
+        
         print('Generating dataset statistics...')
         stats = {}
-        for split_name, split in [("train", train_data), ("val", val_data), ("test", test_video_data)]:
+        for split_name, split in [("train", train_data), ("val", val_data), ("test", test_data)]:
             counts = {name: 0 for name in classes.keys()}
             counts[BACKGROUND_LABEL] = 0
             total_frames = 0
@@ -125,6 +126,27 @@ def main(args):
         stats_path = os.path.join(args.save_dir, 'dataset_statistics.json')
         store_json(stats_path, stats, pretty=True)
         print(f"Dataset statistics saved to {stats_path}")
+
+        print('Counting actions in clips...')
+        stats = {}
+        for split_name, split in [("train", train_data), ("val", val_data), ("test", test_data)]:
+            actions_per_clip = [len(clip_labels) for clip_labels in split._labels_store]
+            max_actions = int(max(actions_per_clip))
+
+            histogram = np.zeros(max_actions + 1, dtype=int)
+            for count in actions_per_clip:
+                histogram[count] += 1
+
+            stats[split_name] = {
+                "num_clips": len(split),
+                "max_actions_per_clip": max_actions,
+                "histogram": histogram.tolist()
+            }
+            
+        # Save the dictionary to JSON
+        stats_path = os.path.join(args.save_dir, 'action_counts.json')
+        store_json(stats_path, stats, pretty=True)
+        print(f"Action counters saved to {stats_path}")
 
         sys.exit('Re-run changing "mode" to "load" in the config JSON for training/inference.')
     else:

@@ -223,7 +223,7 @@ class TemporalDETR(nn.Module):
         self,
         embed_dim,
         num_classes,
-        num_queries=15,
+        num_queries=10,
         num_encoder_layers=3,
         num_decoder_layers=3,
         num_heads=8,
