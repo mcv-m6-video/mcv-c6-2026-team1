@@ -42,7 +42,6 @@ def update_args(args, config):
     args.clip_len = config['clip_len']
     args.dataset = config['dataset']
     args.epoch_num_frames = config['epoch_num_frames']
-    args.feature_arch = config['feature_arch']
     args.num_classes = config['num_classes']
     args.num_epochs = config['num_epochs']
     args.warm_up_epochs = config['warm_up_epochs']
@@ -50,44 +49,20 @@ def update_args(args, config):
     args.qualitatives = config['qualitatives']
     args.device = config['device']
     args.num_workers = config['num_workers']
+    args.use_ap10 = config["use_ap10"]
     args.use_early_stopping = config["use_early_stopping"]
     args.early_stopping_patience = config["early_stopping_patience"]
 
-    # LR
+    args.feature_arch = config['feature_arch']
     args.backbone_learning_rate = config["backbone_learning_rate"]
-    args.temporal_learning_rate = config["temporal_learning_rate"]
+
     args.head_learning_rate = config["head_learning_rate"]
-
-    # Oversampling action frames vs background
-    args.oversample_actions = config["oversample_actions"]
-    args.oversampling_ratio = config["oversampling_ratio"]
-
-    # Temporal tolerance in training
-    args.label_radius = config["label_radius"]
-
-    # Bets model criterion
-    args.use_ap10 = config["use_ap10"]
-
-    # Weights to use for the loss
-    args.class_weights_type = config["class_weights_type"]
-
-    # Focal Loss
-    args.use_focal_loss = config["use_focal_loss"]
-    args.gamma = config["gamma"]
-
-    args.temporal_model = config["temporal_model"]
-    # Transformer
-    args.attention_heads = config["attention_heads"]
+    args.time_weight = config["time_weight"]
+    args.background_weight = config["background_weight"]
+    args.transformer_attention_heads = config["transformer_attention_heads"]
     args.transformer_depth = config["transformer_depth"]
-    args.transformer_dropout = config["transformer_dropout"]
     args.transformer_mlp_dim = config["transformer_mlp_dim"]
-    args.proj_dropout = config["proj_dropout"]
-
-    # GRU
-    args.gru_hidden_dim = config["gru_hidden_dim"]
-    args.gru_layers = config["gru_layers"]
-    args.gru_dropout = config["gru_dropout"]
-    args.gru_bidirectional = config["gru_bidirectional"]
+    args.transformer_dropout = config["transformer_dropout"]
 
     # Run directory
     args.run_dir = os.path.join(args.save_dir, args.model)
