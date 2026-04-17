@@ -138,7 +138,7 @@ class Model(BaseRGBModel):
             for batch_idx, batch in enumerate(tqdm(loader)):
                 frame = batch['frame'].to(self.device).float()
                 label = [l.to(self.device) for l in batch['label']]
-                timestamp = [t.to(self.device) for t in batch['timestamps']]
+                timestamp = [t.to(self.device) for t in batch['timestamp']]
 
                 with torch.cuda.amp.autocast():
                     output = self._model(frame)

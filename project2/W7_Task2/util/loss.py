@@ -95,8 +95,4 @@ class DETRLoss(nn.Module):
         # Total Loss
         total_loss = loss_ce + self.time_weight * loss_time
 
-        return {
-            "loss": total_loss,
-            "loss_ce": loss_ce,
-            "loss_time": loss_time
-        }
+        return total_loss

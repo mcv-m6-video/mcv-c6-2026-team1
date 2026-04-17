@@ -22,8 +22,7 @@ def get_datasets(args):
     overlap = args.overlap if "overlap" in args else DEFAULT_OVERLAP
 
     dataset_kwargs = {
-        'stride': stride, 'overlap': overlap, 'dataset': args.dataset, 'labels_dir': args.labels_dir, 'task': args.task,
-        'label_radius': args.label_radius
+        'stride': stride, 'overlap': overlap, 'dataset': args.dataset, 'labels_dir': args.labels_dir, 'task': args.task
     }
 
     print('Dataset size:', dataset_len)
@@ -58,5 +57,5 @@ def detr_collate_fn(batch):
     frames = torch.stack([item['frame'] for item in batch])
     contains_event = torch.tensor([item['contains_event'] for item in batch])
     labels = [item['label'] for item in batch]
-    targets = [item['target'] for item in batch]
-    return {'frame': frames, 'contains_event': contains_event, 'label': labels, 'target': targets}
+    timestamps = [item['timestamp'] for item in batch]
+    return {'frame': frames, 'contains_event': contains_event, 'label': labels, 'timestamp': timestamps}

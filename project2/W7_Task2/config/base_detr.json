@@ -6,7 +6,6 @@
     "task": "spotting",
     "batch_size": 8,
     "clip_len": 50,
-    "stride": 2,
     "dataset": "soccernetball",
     "epoch_num_frames": 500000,
     "num_classes": 12,
