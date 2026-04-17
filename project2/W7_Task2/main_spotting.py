@@ -58,6 +58,9 @@ def update_args(args, config):
     args.temporal_learning_rate = config["temporal_learning_rate"]
     args.head_learning_rate = config["head_learning_rate"]
 
+    # Head
+    args.head_model = config["head_model"]
+
     # Oversampling action frames vs background
     args.oversample_actions = config["oversample_actions"]
     args.oversampling_ratio = config["oversampling_ratio"]
