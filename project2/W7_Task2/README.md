@@ -3,20 +3,20 @@
 
 This file documents the code for Task 2 of Project 2: Action spotting on the SoccerNet Ball Action Spotting 2025 (SN-BAS-2025) dataset.
 
-Instructions on running the baseline and our best model are detailed next.
+Instructions on running our DETR-based model are detailed next.
 
 ## Running the code
 
-`main_spotting.py` is designed to train and evaluate the baseline using the settings specified in a configuration file. You can run `main_spotting.py` using the following command:
+`main_spotting.py` is designed to train and evaluate the baseline using the settings specified in a configuration file. You can run it using the following command:
 
 ```
 python main_spotting.py --model <model_name>
 ```
 
-Here, `<model_name>` can be chosen freely but must match the name of a configuration file (e.g. `baseline.json`) located in the config directory [config](./config/). For example, to chose the baseline model, you would run
+Here, `<model_name>` can be chosen freely but must match the name of a configuration file (e.g. `detr_baseline.json`) located in the config directory [config](./config/). For example, to chose the baseline model, you would run
 
 ```
-python main_spotting.py --model baseline
+python main_spotting.py --model detr_baseline
 ```
 
 For additional details on configuration options using the configuration file, refer to the README in the [config](./config/) directory.
