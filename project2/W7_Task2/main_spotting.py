@@ -17,7 +17,7 @@ from tabulate import tabulate
 
 #Local imports
 from util.io import load_json, store_json, save_video
-from util.eval_spotting import evaluate, generate_qualitative_results
+from util.eval_spotting import evaluate
 from dataset.datasets import get_datasets, detr_collate_fn
 from model.model_spotting import Model
 
@@ -47,6 +47,7 @@ def update_args(args, config):
     args.warm_up_epochs = config['warm_up_epochs']
     args.only_test = config['only_test']
     args.qualitatives = config['qualitatives']
+    args.tolerance = config['tolerance']
     args.device = config['device']
     args.num_workers = config['num_workers']
     args.use_ap10 = config["use_ap10"]
@@ -167,6 +168,12 @@ def main(args):
         prefetch_factor=(2 if args.num_workers > 0 else None), collate_fn=detr_collate_fn
     )
 
+    test_loader = DataLoader(
+        test_data, shuffle=False, batch_size=args.batch_size,
+        pin_memory=True, num_workers=args.num_workers,
+        prefetch_factor=(2 if args.num_workers > 0 else None), collate_fn=detr_collate_fn
+    )
+
     # Model
     model = Model(args=args)
 
@@ -183,7 +190,7 @@ def main(args):
         epoch = 0
         patience_counter = 0
 
-        print(f'START TRAINING EPOCHS ({args.model})')
+        print(f'START TRAINING ({args.model})')
         for epoch in range(num_epochs):
 
             train_loss = model.epoch(
@@ -191,7 +198,7 @@ def main(args):
                 lr_scheduler=lr_scheduler)
             
             if args.use_ap10:
-                map_score, ap_score = evaluate(model, val_video_data)
+                ap_score = evaluate(model, val_video_data, args.tolerance)
                 criterion_value = np.mean(ap_score[:10]) # Leave out free kick and goal
                 better = criterion_value > best_criterion
             else:
@@ -230,13 +237,15 @@ def main(args):
     model.load(torch.load(os.path.join(args.run_dir, 'checkpoint_best.pt')))
 
     # Evaluation on test split
-    map_score, ap_score = evaluate(model, test_video_data)
+    ap_score = evaluate(model, test_video_data, args.tolerance)
 
     # Model stats
     macs, params = model.get_stats()
 
+    print(f'\nEVALUATION WITH TOLERANCE = {args.tolerance:.2f}s')
+
     # Report results per-class in table
-    print('\nPER-CLASS METRICS\n')
+    print('\nPer-class metrics:')
     table = []
     for i, class_name in enumerate(classes.keys()):
         table.append([class_name, f"{ap_score[i]*100:.2f}"])
@@ -244,12 +253,11 @@ def main(args):
     print(tabulate(table, headers, tablefmt="grid"))
 
     # Report average results in table
-    print('\nEVALUATION SUMMARY\n')
+    print('\nSummary:')
     headers = ["Metric", "Score"]
     avg_table = [
         ["AP10", f"{np.mean(ap_score[:10])*100:.2f}"],
-        ["AP12", f"{np.mean(ap_score)*100:.2f}"],
-        ["SoccerNet mAP", f"{map_score*100:.2f}"]
+        ["AP12", f"{np.mean(ap_score)*100:.2f}"]
     ]
     print(tabulate(avg_table, headers, tablefmt="grid"))
 
@@ -261,7 +269,7 @@ def main(args):
 
     if args.qualitatives:
         print('\nGenerating qualitative results...')
-        qualitative_results = generate_qualitative_results(model, test_video_data, BACKGROUND_LABEL, args.labels_dir)
+        # qualitative_results = generate_qualitative_results(model, test_loader, BACKGROUND_LABEL, args.labels_dir)
         qualitative_dir = os.path.join(args.run_dir, 'qualitative_results')
         os.makedirs(qualitative_dir, exist_ok=True)
         

@@ -17,62 +17,63 @@ from dataset.frame import FPS_SN
 #Constants
 INFERENCE_BATCH_SIZE = 4
 
-def evaluate(model, dataset, batch_size=INFERENCE_BATCH_SIZE, nms_window = 5):
+def evaluate(model, dataset, tolerance, batch_size=INFERENCE_BATCH_SIZE):
     
     pred_dict = {}
     for video, video_len, _ in dataset.videos:
-        pred_dict[video] = (
-            np.zeros((video_len, len(dataset._class_dict)), np.float32), #scores matrix TxC (T with used stride)
-            np.zeros(video_len, np.int32)) #support matrix T
+        # LxC dense scores matrix
+        pred_dict[video] = np.zeros((video_len, len(dataset._class_dict)), np.float32)
 
     for clip in tqdm(DataLoader(
-            dataset, num_workers=batch_size * 2, pin_memory=True,
-            batch_size=batch_size
+            dataset, num_workers=int(batch_size * 2), pin_memory=True,
+            batch_size=int(batch_size)
     )):
         # Batched by dataloader
-        batch_pred_scores = model.predict(clip['frame']) # remove background class
+        batch_pred = model.predict(clip['frame'])
+        probs = batch_pred['probs']             # [B, Q, C+1]
+        timestamps = batch_pred['timestamps']   # [B, Q, 1]
 
         for i in range(clip['frame'].shape[0]):
             video = clip['video'][i]
-            scores, support = pred_dict[video]
-            pred_scores = batch_pred_scores[i]
             start = clip['start'][i].item()
-            if start < 0:
-                pred_scores = pred_scores[-start:, :]
-                start = 0
-            end = start + pred_scores.shape[0]
-            if end >= scores.shape[0]:
-                end = scores.shape[0]
-                pred_scores = pred_scores[:end - start, :]
+            video_len = pred_dict[video].shape[0]
 
-            scores[start:end, :] += pred_scores[:, 1:] # remove background class
-            support[start:end] += (pred_scores.sum(axis=1) != 0) * 1
+            # Map sparse DETR queries to dense frame-level scores
+            for q in range(probs.shape[1]):
 
-    # For mAP evalaution
+                # Predicted class for the query (ignore it if BACKGROUND)
+                pred_class_idx = np.argmax(probs[i, q])
+                if pred_class_idx == 0:
+                    continue
+
+                # Compute frame index for the query (ignore if it falls outside the video)
+                clip_offset = timestamps[i, q, 0] * dataset._clip_len
+                video_offset = int(start + np.round(clip_offset))
+                if video_offset < 0 or video_offset >= video_len:
+                    continue
+                
+                # Map prediction to the dense frame-level scores (retain highest score among queries if needed)
+                score = probs[i, q, pred_class_idx]
+                if score > pred_dict[video][video_offset, pred_class_idx - 1]:
+                    pred_dict[video][video_offset, pred_class_idx - 1] = score
+
+    # Predictions for evaluation (NMS is not needed since DETR is discrete)
     detections_numpy = list()
-
-    # Get detections_numpy (from predictions and applying NMS)
     for video, video_len, _ in dataset.videos:
-        scores, support = pred_dict[video]
-        support[support == 0] = 1
-        scores = scores / support[:, np.newaxis] # mean over support predictions
-        pred = apply_NMS(scores, nms_window, 0.05) # apply NMS
-        detections_numpy.append(pred)
+        detections_numpy.append(pred_dict[video])
 
+    # GTs for evaluation
     targets_numpy = list()
     closests_numpy = list()
-    # Get targets_numpy and closests_numpy (from ground truth)
     for video, video_len, _ in dataset.videos:
         targets = np.zeros((video_len, len(dataset._class_dict)), np.float32)
         labels = json.load(open(os.path.join(dataset._labels_dir, video, 'Labels-ball.json')))
 
         for annotation in labels["annotations"]:
-
             event = dataset._class_dict[annotation["label"]]
-            frame = int(FPS_SN / dataset._stride * ( int(annotation["position"])/1000 )) #with the current framerate
-
-            frame = min(frame, video_len-1)
-            targets[frame, event-1] = 1
+            frame = int(FPS_SN / dataset._stride * (int(annotation["position"]) / 1000))
+            frame = min(frame, video_len - 1)
+            targets[frame, event - 1] = 1
 
         targets_numpy.append(targets)
 
@@ -90,66 +91,41 @@ def evaluate(model, dataset, batch_size=INFERENCE_BATCH_SIZE, nms_window = 5):
                 closest_numpy[start:stop, c] = targets[indexes[i], c]
         closests_numpy.append(closest_numpy)
 
-    # Compute the performances
-    mAP, AP_per_class, _, _, _, _ = (
-        average_mAP(targets_numpy, detections_numpy, closests_numpy, FPS_SN / dataset._stride, deltas=np.array([1]))
+    _, AP_per_class, _, _, _, _ = (
+        average_mAP(targets_numpy, detections_numpy, closests_numpy, FPS_SN / dataset._stride, deltas=np.array([tolerance]))
     )
 
-    return mAP, AP_per_class
-    
+    return AP_per_class
 
-
-def apply_NMS(predictions, window, thresh=0.0):
-
-    nf, nc = predictions.shape
-    for i in range(nc):
-        aux = predictions[:,i]
-        aux2 = np.zeros(nf) -1
-        while(np.max(aux) >= thresh):
-            # Get the max remaining index and value
-            max_value = np.max(aux)
-            max_index = np.argmax(aux)
-            # detections_NMS[max_index,i] = max_value
-
-            nms_from = int(np.maximum(-(window/2)+max_index,0))
-            nms_to = int(np.minimum(max_index+int(window/2), len(aux)))
-
-            aux[nms_from:nms_to] = -1
-            aux2[max_index] = max_value
-        predictions[:,i] = aux2
-
-    return predictions
-
-
-
-def generate_qualitative_results(model, dataset, background_label, videos_dir, batch_size=INFERENCE_BATCH_SIZE, header_height=120):
-
-    # 0. Prepare list of all classes (including background)
-    all_classes = [background_label] + list(dataset._class_dict.keys())
+""" --- IGNORE ---
+def generate_qualitative_results(model, dataset, videos_dir, batch_size=INFERENCE_BATCH_SIZE, header_height=120):
+    classes = list(dataset._class_dict.keys())
 
     # 1. Prepare video data for predictions
     pred_dict = {}
     for video, video_len, _ in dataset.videos:
-        pred_dict[video] = np.zeros((video_len, len(all_classes)), np.float32)
+        pred_dict[video] = np.zeros((video_len, len(classes)), np.float32)
             
     # 2. Run inference (only for the first batch)
     clip_data = []
     first_batch = next(iter(DataLoader(dataset, batch_size=batch_size)))
-    batch_pred_scores = model.predict(first_batch['frame'])
-    for i in range(len(batch_pred_scores)):
+    batch_pred = model.predict(first_batch['frame'])
+    probs = batch_pred['probs']
+    timestamps = batch_pred['timestamps']
+    for i in range(len(probs)):
         video = first_batch['video'][i]
-        scores = pred_dict[video]
-        pred_scores = batch_pred_scores[i]
         start = first_batch['start'][i].item()
-        if start < 0:
-            pred_scores = pred_scores[-start:, :]
-            start = 0
-        end = start + pred_scores.shape[0]
-        if end >= scores.shape[0]:
-            end = scores.shape[0]
-            pred_scores = pred_scores[:end - start, :]
+        end = start + dataset._clip_len
 
-        scores[start:end, :] += pred_scores[:, :] # keep background class
+        # Extract sparse detections for this clip
+        clip_pred = []
+        for q in range(probs.shape[1]):
+            pred_class_idx = np.argmax(probs[i, q])
+            if pred_class_idx != 0: # If it is not background
+                score = probs[i, q, pred_class_idx]
+                rel_frame = int(np.round(timestamps[i, q, 0] * dataset._clip_len))
+                abs_frame = start + rel_frame
+                clip_pred.append((all_classes[pred_class_idx], score, abs_frame))
 
         # Save clip data for visualization
         clip_data.append({
@@ -233,3 +209,4 @@ def generate_qualitative_results(model, dataset, background_label, videos_dir, b
         })
         
     return results
+"""
