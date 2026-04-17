@@ -22,7 +22,7 @@ def store_json(fpath, obj, pretty=False):
     with open(fpath, 'w') as fp:
         json.dump(obj, fp, **kwargs)
 
-def save_video(output_path, frames, fps=5):
+def save_video(output_path, frames, fps=3):
     h, w = frames[0].shape[:2]
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out_video = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
