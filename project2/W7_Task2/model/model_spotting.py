@@ -15,9 +15,8 @@ import torch.nn.functional as F
 from thop import profile, clever_format
 
 #Local imports
-from model.modules import BaseRGBModel, FCLayers, FocalLoss, TemporalTransformer, TemporalGRU, step
-from util.loss import build_class_weights
-from util.io import load_json
+from model.modules import BaseRGBModel, TemporalDETR, step
+from util.loss import DETRLoss
 
 
 class Model(BaseRGBModel):
@@ -47,34 +46,20 @@ class Model(BaseRGBModel):
             else:
                 raise NotImplementedError(self.args._feature_arch)
 
-            self._backbone_dim = feat_dim
-            self._head_dim = feat_dim
+            self.embed_dim = feat_dim
             self._features = features
 
-            # Temporal transformer
-            if self.args.temporal_model == "transformer":
-                self._temporal_model = TemporalTransformer(
-                    clip_len = self.args.clip_len,
-                    embed_dim = self._backbone_dim,
-                    num_heads=args.attention_heads,
-                    depth=args.transformer_depth,
-                    attn_dropout=args.transformer_dropout,
-                    mlp_dim=args.transformer_mlp_dim,
-                    proj_dropout=args.proj_dropout
-                )
-
-            elif self.args.temporal_model == "gru":
-                self._temporal_model = TemporalGRU(
-                    embed_dim=self._backbone_dim,
-                    hidden_dim=args.gru_hidden_dim,
-                    num_layers=args.gru_layers,
-                    dropout=args.gru_dropout,
-                    bidirectional=args.gru_bidirectional
-                )
-                self._head_dim = self._temporal_model.out_dim
-
-            # MLP for classification
-            self._fc = FCLayers(self._head_dim, self.args.num_classes+1) # +1 for background class (we now perform per-frame classification with softmax, therefore we have the extra background class)
+            # Temporal DETR model
+            self._detr = TemporalDETR(
+                embed_dim=self.embed_dim,
+                num_classes=args.num_classes,
+                num_encoder_layers=args.transformer_depth,
+                num_decoder_layers=args.transformer_depth,
+                num_heads=args.transformer_attention_heads,
+                dim_feedforward=args.transformer_mlp_dim,
+                dropout=args.transformer_dropout,
+                max_len=args.clip_len
+            )
 
             #Augmentations and crop
             self.augmentation = T.Compose([
@@ -102,25 +87,16 @@ class Model(BaseRGBModel):
 
             # Different input shapes -> resize!
             if self._feature_arch.startswith('vitbase'):
-                x = F.interpolate(
-                    x.view(-1, channels, height, width),
-                    size=(224, 224),
-                    mode='bilinear',
-                    align_corners=False
-                )
+                x = F.interpolate(x.view(-1, channels, height, width), size=(224, 224), mode='bilinear', align_corners=False)
             else:
                 x = x.view(-1, channels, height, width)
 
-            im_feat = self._features(x).reshape(batch_size, clip_len, self._backbone_dim) #B, T, D
+            video_feat = self._features(x).reshape(batch_size, clip_len, self.embed_dim) #B, T, D
 
-            # Apply model to encode temporality
-            if self.args.temporal_model in ["transformer", "gru"]:
-                im_feat = self._temporal_model(im_feat)
+            # Pass through DETR ('pred_logits' + 'pred_time')
+            outputs = self._detr(video_feat)
 
-            #MLP
-            im_feat = self._fc(im_feat) #B, T, num_classes+1
-
-            return im_feat 
+            return outputs 
         
         def normalize(self, x):
             return x / 255.
@@ -146,25 +122,8 @@ class Model(BaseRGBModel):
         self._model.to(self.device)
         self._num_classes = args.num_classes
 
-        if args.class_weights_type == "stats":
-            stats = load_json(os.path.join(args.save_dir, 'dataset_statistics.json'))
-            train_counts = stats["train"]["counts"]
-            self.class_weights = build_class_weights(train_counts).to(self.device)
-        elif args.class_weights_type == "hardcoded":
-            self.class_weights = torch.tensor([1.0] + [5.0] * (self._num_classes), dtype=torch.float32).to(self.device)
-        else:
-            self.class_weights = torch.tensor([1.0] + [1.0] * (self._num_classes), dtype=torch.float32).to(self.device)
-
-        if args.use_focal_loss:
-            self.criterion = FocalLoss(
-                alpha=self.class_weights,
-                gamma=args.gamma
-            )
-        else:
-            self.criterion = nn.CrossEntropyLoss(
-                weight=self.class_weights,
-                reduction="mean"
-            )
+        # Initialize DETR loss
+        self.criterion = DETRLoss(args.num_classes, args.time_weight, args.background_weight).to(self.device)
 
     def epoch(self, loader, optimizer=None, scaler=None, lr_scheduler=None):
 
@@ -178,43 +137,15 @@ class Model(BaseRGBModel):
         with torch.no_grad() if optimizer is None else nullcontext():
             for batch_idx, batch in enumerate(tqdm(loader)):
                 frame = batch['frame'].to(self.device).float()
-                label = batch['label']
-                label = label.to(self.device).long()
+                label = [l.to(self.device) for l in batch['label']]
+                timestamp = [t.to(self.device) for t in batch['timestamps']]
 
                 with torch.cuda.amp.autocast():
-                    pred = self._model(frame)
-                    pred = pred.view(-1, self._num_classes + 1) # B*T, num_classes
-                    label = label.view(-1) # B*T
-
-                    if self._args.oversample_actions:
-                        pos_mask = label != 0
-                        neg_mask = label == 0
-
-                        pos_idx = torch.where(pos_mask)[0]
-                        neg_idx = torch.where(neg_mask)[0]
-
-                        num_pos = pos_idx.numel()
-
-                        if num_pos > 0:
-                            neg_ratio = self._args.oversampling_ratio
-                            num_neg_keep = min(neg_ratio * num_pos, neg_idx.numel())
-                            perm = torch.randperm(neg_idx.numel(), device=neg_idx.device)[:num_neg_keep]
-                            neg_idx = neg_idx[perm]
-                            keep_idx = torch.cat([pos_idx, neg_idx], dim=0)
-                        else:
-                            # fallback
-                            num_neg_keep = min(256, neg_idx.numel())
-                            perm = torch.randperm(neg_idx.numel(), device=neg_idx.device)[:num_neg_keep]
-                            keep_idx = neg_idx[perm]
-
-                        pred = pred[keep_idx]
-                        label = label[keep_idx]
-
-                    loss = self.criterion(pred, label)
+                    output = self._model(frame)
+                    loss = self.criterion(output, label, timestamp)
 
                 if optimizer is not None:
-                    step(optimizer, scaler, loss,
-                        lr_scheduler=lr_scheduler)
+                    step(optimizer, scaler, loss, lr_scheduler=lr_scheduler)
 
                 epoch_loss += loss.detach().item()
 
@@ -233,12 +164,15 @@ class Model(BaseRGBModel):
         self._model.eval()
         with torch.no_grad():
             with torch.cuda.amp.autocast():
-                pred = self._model(seq)
+                output = self._model(seq)
 
-            # apply sigmoid
-            pred = torch.softmax(pred, dim=-1)
+            # Apply softmax to logits
+            probs = torch.softmax(output['pred_logits'], dim=-1)
             
-            return pred.cpu().numpy()
+            return {
+                "probs": probs.cpu().numpy(),
+                "timestamps": output['pred_time'].cpu().numpy()
+            }
 
     def get_stats(self):
         # Dummy input (shape from arguments)

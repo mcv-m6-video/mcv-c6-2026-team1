@@ -41,16 +41,10 @@ class BaseRGBModel(ABCModel):
                 "lr": self._args.backbone_learning_rate
             },
             {
-                "params": self._model._fc.parameters(),
+                "params": self._model._detr.parameters(),
                 "lr": self._args.head_learning_rate
             }
         ]
-
-        if hasattr(self._model, "_temporal_model"):
-            param_groups.append({
-                "params": self._model._temporal_model.parameters(),
-                "lr": self._args.temporal_learning_rate
-            })
 
         optimizer = torch.optim.AdamW(param_groups)
         scaler = torch.cuda.amp.GradScaler() if self.device == 'cuda' else None
@@ -214,3 +208,75 @@ class TemporalGRU(nn.Module):
         # x: [B, T, D]
         y, _ = self.gru(x)   # [B, T, out_dim]
         return y
+    
+class TemporalPositionalEncoding(nn.Module):
+    def __init__(self, max_len, embed_dim):
+        super().__init__()
+        self.pos_embed = nn.Parameter(torch.randn(1, max_len, embed_dim) * 0.02)
+
+    def forward(self, x):
+        T = x.size(1)
+        return self.pos_embed[:, :T, :]
+
+class TemporalDETR(nn.Module):
+    def __init__(
+        self,
+        embed_dim,
+        num_classes,
+        num_queries=15,
+        num_encoder_layers=3,
+        num_decoder_layers=3,
+        num_heads=8,
+        dim_feedforward=2048,
+        dropout=0.1,
+        max_len=250,
+    ):
+        super().__init__()
+
+        self.pos_encoding = TemporalPositionalEncoding(max_len=max_len, embed_dim=embed_dim)
+
+        # Encoder (Processes the full video encoding)
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=embed_dim, nhead=num_heads, dim_feedforward=dim_feedforward,
+            dropout=dropout, batch_first=True, activation="gelu", norm_first=True,
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
+
+        # Decoder (Processes the learned queries)
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=embed_dim, nhead=num_heads, dim_feedforward=dim_feedforward,
+            dropout=dropout, batch_first=True, activation="gelu", norm_first=True,
+        )
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_decoder_layers)
+
+        # Learned event queries (The Q potential actions)
+        self.query_embed = nn.Embedding(num_queries, embed_dim)
+
+        # FFN Prediction heads
+        self.class_head = nn.Linear(embed_dim, num_classes + 1)  # +1 for BACKGROUND
+        self.time_head = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim),
+            nn.ReLU(),
+            nn.Linear(embed_dim, 1),
+            nn.Sigmoid() # Forces output to be a normalized timestamp [0, 1]
+        )
+
+    def forward(self, x):
+        B = x.shape[0]
+
+        # Encoder pass
+        pos = self.pos_encoding(x)     
+        memory = self.encoder(x + pos) # Add positional info before encoder
+
+        # Decoder pass
+        query_embed = self.query_embed.weight.unsqueeze(0).repeat(B, 1, 1) 
+        hs = self.decoder(tgt=query_embed, memory=memory) 
+
+        # Heads
+        pred_logits = self.class_head(hs)  
+        pred_time = self.time_head(hs)    
+
+        return {
+            "pred_logits": pred_logits,
+            "pred_time": pred_time
+        }
