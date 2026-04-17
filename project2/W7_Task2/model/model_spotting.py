@@ -16,7 +16,7 @@ from thop import profile, clever_format
 
 #Local imports
 from model.modules import BaseRGBModel, FCLayers, FocalLoss, TemporalTransformer, TemporalGRU, step
-from util.loss_weigths import build_class_weights
+from util.loss import build_class_weights
 from util.io import load_json
 
 
