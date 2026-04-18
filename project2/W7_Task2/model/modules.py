@@ -87,6 +87,10 @@ def step(optimizer, scaler, loss, lr_scheduler=None):
     else:
         scaler.scale(loss).backward()
 
+    # Clip gradients to prevent explosion
+    if scaler is not None: scaler.unscale_(optimizer) # Unscale before clipping when using AMP
+    torch.nn.utils.clip_grad_norm_([p for group in optimizer.param_groups for p in group['params']], max_norm=0.1)
+
     if scaler is None:
         optimizer.step()
     else:

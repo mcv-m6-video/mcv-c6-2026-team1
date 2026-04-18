@@ -40,8 +40,8 @@ class DETRLoss(nn.Module):
         labels: list of B tensors (each shape [N_actions])
         timestamps: list of B tensors (each shape [N_actions, 1])
         """
-        pred_logits = outputs['pred_logits']
-        pred_time = outputs['pred_time']
+        pred_logits = outputs['pred_logits'].float()
+        pred_time = outputs['pred_time'].float()
         B, Q = pred_logits.shape[:2]
 
         # 1. HUNGARIAN MATCHING
@@ -65,6 +65,9 @@ class DETRLoss(nn.Module):
             # Total cost matrix
             C = cost_class + self.time_weight * cost_time
             C = C.cpu().detach().numpy()
+
+            # Replace NaNs with a large number to avoid issues in linear_sum_assignment
+            C = np.nan_to_num(C, nan=100.0, posinf=100.0, neginf=-100.0)
 
             # Hungarian algorithm finds the optimal 1-to-1 matching
             row_ind, col_ind = linear_sum_assignment(C)
