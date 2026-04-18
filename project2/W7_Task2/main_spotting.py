@@ -17,7 +17,7 @@ from tabulate import tabulate
 
 #Local imports
 from util.io import load_json, store_json, save_video
-from util.eval_spotting import evaluate
+from util.eval_spotting import evaluate, generate_qualitative_results
 from dataset.datasets import get_datasets, detr_collate_fn
 from model.model_spotting import Model
 
@@ -168,12 +168,6 @@ def main(args):
         prefetch_factor=(2 if args.num_workers > 0 else None), collate_fn=detr_collate_fn
     )
 
-    test_loader = DataLoader(
-        test_data, shuffle=False, batch_size=args.batch_size,
-        pin_memory=True, num_workers=args.num_workers,
-        prefetch_factor=(2 if args.num_workers > 0 else None), collate_fn=detr_collate_fn
-    )
-
     # Model
     model = Model(args=args)
 
@@ -212,7 +206,7 @@ def main(args):
                 patience_counter += 1
             
             #Printing info epoch
-            print('[Epoch {}] Train loss: {:0.5f} Val criterion: {:0.5f}'.format(
+            print('[Epoch {}] Train loss: {:0.5f} | Val criterion: {:0.5f}'.format(
                 epoch, train_loss, criterion_value))
             if better:
                 print('New best epoch!')
@@ -269,7 +263,7 @@ def main(args):
 
     if args.qualitatives:
         print('\nGenerating qualitative results...')
-        # qualitative_results = generate_qualitative_results(model, test_loader, BACKGROUND_LABEL, args.labels_dir)
+        qualitative_results = generate_qualitative_results(model, test_video_data, args.labels_dir, args.tolerance)
         qualitative_dir = os.path.join(args.run_dir, 'qualitative_results')
         os.makedirs(qualitative_dir, exist_ok=True)
         

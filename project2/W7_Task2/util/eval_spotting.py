@@ -97,16 +97,34 @@ def evaluate(model, dataset, tolerance, batch_size=INFERENCE_BATCH_SIZE):
 
     return AP_per_class
 
-""" --- IGNORE ---
-def generate_qualitative_results(model, dataset, videos_dir, batch_size=INFERENCE_BATCH_SIZE, header_height=120):
-    classes = list(dataset._class_dict.keys())
+    
 
-    # 1. Prepare video data for predictions
-    pred_dict = {}
-    for video, video_len, _ in dataset.videos:
-        pred_dict[video] = np.zeros((video_len, len(classes)), np.float32)
-            
-    # 2. Run inference (only for the first batch)
+
+def generate_qualitative_results(model, dataset, videos_dir, tolerance, batch_size=INFERENCE_BATCH_SIZE):
+    """
+    Generates qualitative visualizations for the first batch of data.
+    Freezes on GTs (Blue) and Predictions (Green=TP, Red=FP).
+    """
+    classes = list(dataset._class_dict.keys())
+    effective_fps = FPS_SN / dataset._stride
+    tol_frames = tolerance * effective_fps
+    freeze_frames_count = int(10) # Freeze for 10 frames
+
+    # OpenCV BGR Colors
+    COLOR_GT = (255, 0, 0)      # Blue
+    COLOR_TP = (0, 255, 0)      # Green
+    COLOR_FP = (0, 0, 255)      # Red
+    COLOR_WHITE = (255, 255, 255)
+    COLOR_BLACK = (0, 0, 0)
+
+    def draw_outlined_text(img, text, position, font_scale, color, thickness):
+        """Helper to draw easily readable text on 720p videos."""
+        # Draw black outline
+        cv2.putText(img, text, position, cv2.FONT_HERSHEY_SIMPLEX, font_scale, COLOR_BLACK, thickness + 2)
+        # Draw inner color
+        cv2.putText(img, text, position, cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness)
+
+    # 1. Run inference on the FIRST batch
     clip_data = []
     first_batch = next(iter(DataLoader(dataset, batch_size=batch_size)))
     batch_pred = model.predict(first_batch['frame'])
@@ -116,91 +134,120 @@ def generate_qualitative_results(model, dataset, videos_dir, batch_size=INFERENC
         video = first_batch['video'][i]
         start = first_batch['start'][i].item()
         end = start + dataset._clip_len
+        
+        # --- A. Extract Ground Truths ---
+        labels = json.load(open(os.path.join(dataset._labels_dir, video, 'Labels-ball.json')))
+        clip_gts = [] # list of dicts: {'class_id': id, 'name': name, 'frame': abs_frame}
+        for annotation in labels["annotations"]:
+            frame = int(effective_fps * (int(annotation["position"]) / 1000))
+            if start <= frame < end:
+                cls_name = annotation["label"]
+                clip_gts.append({
+                    'name': cls_name, 
+                    'frame': frame
+                })
 
-        # Extract sparse detections for this clip
+        # --- B. Extract DETR Predictions and Evaluate TP/FP ---
         clip_pred = []
         for q in range(probs.shape[1]):
             pred_class_idx = np.argmax(probs[i, q])
-            if pred_class_idx != 0: # If it is not background
-                score = probs[i, q, pred_class_idx]
-                rel_frame = int(np.round(timestamps[i, q, 0] * dataset._clip_len))
-                abs_frame = start + rel_frame
-                clip_pred.append((all_classes[pred_class_idx], score, abs_frame))
+            if pred_class_idx == 0: 
+                continue # Ignore BACKGROUND
+                
+            name = classes[pred_class_idx - 1]
+            score = probs[i, q, pred_class_idx]
+            rel_frame = int(np.round(timestamps[i, q, 0] * dataset._clip_len))
+            abs_frame = np.clip(start + rel_frame, start, end - 1)
+            
+            # Find the closest GT of the SAME class to calculate tolerance
+            same_class_gts = [gt for gt in clip_gts if gt['name'] == name]
+            
+            is_tp = False
+            time_diff_sec = float('inf')
+            if same_class_gts:
+                # Find the GT with the absolute minimum frame distance
+                closest_gt = min(same_class_gts, key=lambda x: abs(x['frame'] - abs_frame))
+                frame_diff = abs_frame - closest_gt['frame'] # Positive means pred is late, negative means early
+                time_diff_sec = frame_diff / effective_fps
+                if abs(frame_diff) <= tol_frames:
+                    is_tp = True
 
-        # Save clip data for visualization
+            clip_pred.append({
+                'name': name,
+                'score': score,
+                'frame': abs_frame,
+                'is_tp': is_tp,
+                'diff_sec': time_diff_sec
+            })
+                
         clip_data.append({
             'video': video,
             'start': start,
-            'end': end
+            'end': end,
+            'gts': clip_gts,
+            'preds': clip_pred
         })
 
-    # 3. Get predictions/GTs for the first batch
-    for clip in clip_data:
-        video = clip['video']
-        start = clip['start']
-        end = clip['end']
-
-        # -- DETECTIONS (class, score) --
-        clip_pred = []
-        for frame_scores in pred_dict[video][start:end]:
-            max_class_idx = np.argmax(frame_scores)
-            clip_pred.append((all_classes[max_class_idx], frame_scores[max_class_idx]))
-
-        clip['detections'] = clip_pred
-
-        # -- GROUND TRUTHS (class) --
-        labels = json.load(open(os.path.join(dataset._labels_dir, video, 'Labels-ball.json')))
-        clip_gts = [all_classes[0]] * (end - start) # default to background
-        for annotation in labels["annotations"]:
-            frame = int(FPS_SN / dataset._stride * (int(annotation["position"])/1000))
-
-            # Only process GTs that fall inside this specific clip
-            if start <= frame < end:
-                clip_gts[frame - start] = annotation["label"]
-
-        clip['gts'] = clip_gts
-
-    # 4. Generate results
+    # 2. Render the Video Frames at 720p
     results = []
     for clip in clip_data:
-        detections = clip['detections']
-        gt_labels = clip['gts']
-
-        # Read 720p video from dataset
         video_path = os.path.join(videos_dir, clip['video'], '720p.mp4')
         cap = cv2.VideoCapture(video_path)
         cap.set(cv2.CAP_PROP_POS_FRAMES, clip['start'] * dataset._stride)
 
         clip_length = clip['end'] - clip['start']
         processed_frames = []
-        for i in range(clip_length):
-            _, frame = cap.read()
+        
+        for frame_idx in range(clip_length):
+            ret, frame = cap.read()
+            if not ret: break
 
-            # Prepare the expanded canvas for text
-            h, w, c = frame.shape
-            canvas = np.zeros((h + header_height, w, c), dtype=np.uint8)
-            canvas[header_height:, :, :] = frame
-
-            pred, score = detections[i]
-            gt = gt_labels[i]
-
-            # Draw text on the header
-            cv2.putText(canvas, f"Frame: {i+1}/{clip_length}", 
-                        (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            cv2.putText(canvas, f"GT: {gt}", 
-                        (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.putText(canvas, f"PRED: {pred} ({score * 100:.2f}%)", 
-                        (20, 105), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+            current_abs_frame = clip['start'] + frame_idx
             
-            processed_frames.append(canvas)
+            # Check if this exact frame has an event
+            current_gts = [gt for gt in clip['gts'] if gt['frame'] == current_abs_frame]
+            current_preds = [p for p in clip['preds'] if p['frame'] == current_abs_frame]
 
-            # Skip frames according to stride 
+            # If there's an event, we generate a frozen frame
+            if current_gts or current_preds:
+                freeze_frame = frame.copy()
+                y_offset = 60
+                
+                # Draw GTs
+                for gt in current_gts:
+                    text = f"GT: {gt['name']}"
+                    draw_outlined_text(freeze_frame, text, (40, y_offset), 1.5, COLOR_GT, 3)
+                    y_offset += 50
+                    
+                # Draw Preds
+                for p in current_preds:
+                    status = "TP" if p['is_tp'] else "FP"
+                    color = COLOR_TP if p['is_tp'] else COLOR_FP
+                    
+                    diff_str = f"{p['diff_sec']:+.2f}s" if p['diff_sec'] != float('inf') else "No GT"
+                    text = f"PRED: {p['name']} ({p['score']*100:.2f}%) | {status} [{diff_str}]"
+                    
+                    draw_outlined_text(freeze_frame, text, (40, y_offset), 1.5, color, 3)
+                    y_offset += 50
+                
+                # Add frame counter to freeze frame
+                draw_outlined_text(freeze_frame, f"Frame: {current_abs_frame}", (40, 700), 1.0, COLOR_WHITE, 2)
+                
+                # Append the freeze frame multiple times to simulate the 1-second pause
+                for _ in range(freeze_frames_count):
+                    processed_frames.append(freeze_frame)
+
+            # Process the normal, running frame (just the frame counter)
+            normal_frame = frame.copy()
+            draw_outlined_text(normal_frame, f"Frame: {current_abs_frame}", (40, 700), 1.0, COLOR_WHITE, 2)
+            processed_frames.append(normal_frame)
+
+            # Fast-forward the cv2 reader according to the dataset stride
             for _ in range(dataset._stride - 1):
                 cap.read()
 
         cap.release()
             
-        # Store the rendered frames in a clean dictionary
         results.append({
             'video': clip['video'],
             'start': clip['start'],
@@ -209,4 +256,3 @@ def generate_qualitative_results(model, dataset, videos_dir, batch_size=INFERENC
         })
         
     return results
-"""
