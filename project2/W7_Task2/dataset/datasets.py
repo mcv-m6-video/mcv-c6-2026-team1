@@ -18,8 +18,8 @@ def get_datasets(args):
     classes = load_classes(os.path.join('data', args.dataset, 'class.txt'))
 
     dataset_len = args.epoch_num_frames // args.clip_len
-    stride = args.stride if "stride" in args else DEFAULT_STRIDE
-    overlap = args.overlap if "overlap" in args else DEFAULT_OVERLAP
+    stride = args.stride if hasattr(args, "stride") else DEFAULT_STRIDE
+    overlap = args.overlap if  hasattr(args, "overlap") else DEFAULT_OVERLAP
 
     dataset_kwargs = {
         'stride': stride, 'overlap': overlap, 'dataset': args.dataset, 'labels_dir': args.labels_dir, 'task': args.task
