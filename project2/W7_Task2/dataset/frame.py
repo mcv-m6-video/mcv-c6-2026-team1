@@ -344,14 +344,23 @@ class ActionSpotVideoDataset(Dataset):
         self._clips = []
         for l in self._games:
             has_clip = False
-            for i in range(
-                -pad_len * self._stride,
-                max(0, int(l['num_frames'] - (self._clip_sampling_step * stride))), \
-                # Need to ensure that all clips have at least one frame
+
+            clip_span = self._clip_len * self._stride
+            last_start = max(0, int(l['num_frames']) - clip_span)
+
+            starts = list(range(
+                -self._pad_len * self._stride,
+                last_start + 1,
                 self._clip_sampling_step
-            ):
+            ))
+
+            if not starts or starts[-1] != last_start:
+                starts.append(last_start)
+
+            for s in starts:
                 has_clip = True
-                self._clips.append((l['video'], i))
+                self._clips.append((l['video'], s))
+
             assert has_clip, l
 
     def __len__(self):
