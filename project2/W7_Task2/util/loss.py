@@ -24,10 +24,11 @@ def build_class_weights(train_counts, max_weight=10.0):
 
 
 class DETRLoss(nn.Module):
-    def __init__(self, num_classes, time_weight, eos_coef=0.1):
+    def __init__(self, num_classes, time_weight, match_time_weight, eos_coef=0.1):
         super().__init__()
         self.num_classes = num_classes
         self.time_weight = time_weight
+        self.match_time_weight = match_time_weight
         self.eos_coef = eos_coef # Weight for the BACKGROUND class
         
         class_weights = torch.ones(self.num_classes + 1)
@@ -63,7 +64,7 @@ class DETRLoss(nn.Module):
             cost_time = torch.cdist(out_timestamp, tgt_timestamps, p=1)
             
             # Total cost matrix
-            C = cost_class + self.time_weight * cost_time
+            C = cost_class + self.match_time_weight * cost_time
             C = C.cpu().detach().numpy()
 
             # Replace NaNs with a large number to avoid issues in linear_sum_assignment
