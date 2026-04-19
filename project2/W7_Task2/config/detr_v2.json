@@ -1,0 +1,33 @@
+{
+    "frame_dir": "./../SoccerNet/SN-BAS-2025-FRAMES/398x224",
+    "save_dir": "./../SoccerNet/SN-BAS-2025-SAVE_DIR",
+    "labels_dir": "./../SoccerNet/SN-BAS-2025",
+    "store_mode": "load",
+    "task": "spotting",
+    "batch_size": 8,
+    "clip_len": 50,
+    "dataset": "soccernetball",
+    "epoch_num_frames": 500000,
+    "num_classes": 12,
+    "num_epochs": 20,
+    "warm_up_epochs": 3,
+    "only_test": false,
+    "qualitatives": true,
+    "tolerance": 0.5,
+    "device": "cuda",
+    "num_workers": 4,
+    "use_ap10": true,
+    "use_early_stopping": true,
+    "early_stopping_patience": 6,
+
+    "feature_arch": "rny002",
+    "backbone_learning_rate": 0.00001,
+
+    "head_learning_rate": 0.0001,
+    "time_weight": 5.0,
+    "background_weight": 0.1,
+    "transformer_attention_heads": 4,
+    "transformer_depth": 4,
+    "transformer_mlp_dim": 1024,
+    "transformer_dropout": 0.1
+}
