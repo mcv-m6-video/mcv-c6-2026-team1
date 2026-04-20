@@ -39,32 +39,19 @@ class Model(BaseRGBModel):
                 raise NotImplementedError(self._feature_arch)
             
             if args.maintain_temporal:
-                print(">> Patching X3D to maintain full temporal resolution (L)")
-                for m in features.modules():
-                    # Find any 3D Conv and force its temporal stride to 1
-                    if isinstance(m, nn.Conv3d):
-                        if m.stride[0] > 1:
-                            m.stride = (1, m.stride[1], m.stride[2])
-                    # Ensure any 3D Pooling also maintains temporal resolution
-                    elif isinstance(m, (nn.MaxPool3d, nn.AvgPool3d)):
-                        if isinstance(m.stride, tuple) and m.stride[0] > 1:
-                            m.stride = (1, m.stride[1], m.stride[2])
+                print(">> Using default X3D to maintain full temporal resolution (L)")
             else:
-                print(">> Using default X3D temporal reduction (L')")
+                print(">> Added 1D conv as neck to reduce temporal reduction (L')")
 
             self._features = features
-            
-            # DYNAMIC FEATURE DIMENSION EXTRACTION
-            # Since we bypass the final head, we pass a dummy tensor to securely 
-            # find the exact output dimension of Block 4 for the DETR embedding.
-            with torch.no_grad():
-                dummy_input = torch.zeros(1, 3, args.clip_len, 224, 224)
-                x_dummy = dummy_input
-                for i, block in enumerate(self._features.blocks):
-                    if i == 5:
-                        break
-                    x_dummy = block(x_dummy)
-                self.embed_dim = x_dummy.shape[1] # Channels after Block 4
+            self.embed_dim = 192  # X3D-S/M/L output feature dimension after block 4
+
+            # Define a 1D Convolutional neck for L -> L' reduction if not maintaining temporal resolution
+            self.temporal_aggregation = nn.Sequential(
+                nn.Conv1d(self.embed_dim, self.embed_dim, kernel_size=3, stride=2, padding=1),
+                nn.BatchNorm1d(self.embed_dim),
+                nn.ReLU()
+            )
 
             # Temporal DETR model
             self._detr = TemporalDETR(
@@ -112,10 +99,13 @@ class Model(BaseRGBModel):
 
             # Pool only spatial dims, keep temporal dim
             x = F.adaptive_avg_pool3d(x, (x.size(2), 1, 1))  # [B, D, L', 1, 1]
-            print(x.shape)
             x = x.squeeze(-1).squeeze(-1)                    # [B, D, L']
+
+            if not self.args.maintain_temporal:
+                # Apply learnable 1D convolution to reduce temporal dimension
+                x = self.temporal_aggregation(x)
+
             video_feat = x.permute(0, 2, 1)                  # [B, L', D]
-            print(x.shape)
 
             # Pass through DETR ('pred_logits' + 'pred_time')
             outputs = self._detr(video_feat)
