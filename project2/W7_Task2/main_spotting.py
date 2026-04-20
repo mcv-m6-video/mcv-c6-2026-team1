@@ -18,6 +18,7 @@ from tabulate import tabulate
 #Local imports
 from util.io import load_json, store_json, save_video
 from util.eval_spotting import evaluate, generate_qualitative_results
+from util.debugging import debug_predictions
 from dataset.datasets import get_datasets, detr_collate_fn
 from model import get_model
 
@@ -63,6 +64,7 @@ def update_args(args, config):
 
     args.head_learning_rate = config["head_learning_rate"]
     args.time_weight = config["time_weight"]
+    args.num_queries = config["num_queries"]
     args.background_weight = config["background_weight"]
     args.transformer_attention_heads = config["transformer_attention_heads"]
     args.transformer_depth = config["transformer_depth"]
@@ -71,6 +73,9 @@ def update_args(args, config):
 
     # Run directory
     args.run_dir = os.path.join(args.save_dir, args.model)
+
+    # Debug
+    args.print_debug = config["print_debug"]
 
     return args
 
@@ -233,6 +238,10 @@ def main(args):
 
     print('\nSTART INFERENCE')
     model.load(torch.load(os.path.join(args.run_dir, 'checkpoint_best.pt')))
+
+    # Debug predictions
+    if args.print_debug:
+        debug_predictions(model, test_data, classes, num_samples=5)
 
     # Evaluation on test split
     ap_score = evaluate(model, test_video_data, args.tolerance)

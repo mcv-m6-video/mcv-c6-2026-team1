@@ -53,6 +53,7 @@ class Model(BaseRGBModel):
             self._detr = TemporalDETR(
                 embed_dim=self.embed_dim,
                 num_classes=args.num_classes,
+                num_queries=args.num_queries,
                 num_encoder_layers=args.transformer_depth,
                 num_decoder_layers=args.transformer_depth,
                 num_heads=args.transformer_attention_heads,
