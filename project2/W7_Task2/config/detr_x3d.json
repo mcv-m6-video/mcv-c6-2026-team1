@@ -13,21 +13,25 @@
     "warm_up_epochs": 3,
     "only_test": false,
     "qualitatives": true,
-    "tolerance": 0.5,
+    "tolerance": 1.0,
     "device": "cuda",
     "num_workers": 4,
     "use_ap10": true,
     "use_early_stopping": true,
     "early_stopping_patience": 6,
 
-    "feature_arch": "rny002",
+    "use_focal_loss": true,
+
+    "model_type": "x3d",
+    "maintain_temporal": true,
+    "feature_arch": "x3d_m",
     "backbone_learning_rate": 0.00001,
 
-    "head_learning_rate": 0.0001,
+    "head_learning_rate": 0.00005,
     "time_weight": 5.0,
     "background_weight": 0.1,
     "transformer_attention_heads": 4,
     "transformer_depth": 4,
-    "transformer_mlp_dim": 1024,
+    "transformer_mlp_dim": 512,
     "transformer_dropout": 0.1
 }

@@ -18,3 +18,4 @@ gdown
 thop
 debugpy
 matplotlib
+pytorchvideo

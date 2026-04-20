@@ -19,7 +19,7 @@ from tabulate import tabulate
 from util.io import load_json, store_json, save_video
 from util.eval_spotting import evaluate, generate_qualitative_results
 from dataset.datasets import get_datasets, detr_collate_fn
-from model.model_spotting import Model
+from model import get_model
 
 BACKGROUND_LABEL = "BACKGROUND"
 
@@ -56,6 +56,8 @@ def update_args(args, config):
 
     args.use_focal_loss = config["use_focal_loss"]
 
+    args.model_type = config['model_type']
+    args.maintain_temporal = config['maintain_temporal']
     args.feature_arch = config['feature_arch']
     args.backbone_learning_rate = config["backbone_learning_rate"]
 
@@ -171,7 +173,7 @@ def main(args):
     )
 
     # Model
-    model = Model(args=args)
+    model = get_model(args=args)
 
     optimizer, scaler = model.get_optimizer()
 
