@@ -123,7 +123,7 @@ class Model(BaseRGBModel):
         self._num_classes = args.num_classes
 
         # Initialize DETR loss
-        self.criterion = DETRLoss(args.num_classes, args.time_weight, args.background_weight).to(self.device)
+        self.criterion = DETRLoss(args.num_classes, args.time_weight, args.background_weight, args.use_focal_loss).to(self.device)
 
     def epoch(self, loader, optimizer=None, scaler=None, lr_scheduler=None):
 

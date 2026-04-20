@@ -54,6 +54,8 @@ def update_args(args, config):
     args.use_early_stopping = config["use_early_stopping"]
     args.early_stopping_patience = config["early_stopping_patience"]
 
+    args.use_focal_loss = config["use_focal_loss"]
+
     args.feature_arch = config['feature_arch']
     args.backbone_learning_rate = config["backbone_learning_rate"]
 

@@ -3,36 +3,22 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from scipy.optimize import linear_sum_assignment
-
-def build_class_weights(train_counts, max_weight=10.0):
-    counts = []
-    for class_name in train_counts.keys():
-        counts.append(train_counts[class_name])
-
-    counts = np.array(counts, dtype=np.float32)
-    counts = np.maximum(counts, 1.0)
-
-    raw_weights = 1.0 / np.sqrt(counts)
-
-    # normalize so background weight becomes 1 (background is first class)
-    raw_weights = raw_weights / raw_weights[0]
-
-    # clip to avoid huge weights
-    raw_weights = np.clip(raw_weights, 1.0, max_weight)
-
-    return torch.tensor(raw_weights, dtype=torch.float32)
-
+from model.modules import FocalLoss
 
 class DETRLoss(nn.Module):
-    def __init__(self, num_classes, time_weight, eos_coef=0.1):
+    def __init__(self, num_classes, time_weight, use_focal_loss, eos_coef=0.1):
         super().__init__()
         self.num_classes = num_classes
         self.time_weight = time_weight
+        self.use_focal_loss = use_focal_loss
         self.eos_coef = eos_coef # Weight for the BACKGROUND class
         
         class_weights = torch.ones(self.num_classes + 1)
         class_weights[0] = self.eos_coef 
         self.register_buffer('ce_weight', class_weights)
+
+        # Focal loss
+        self.focal_loss = FocalLoss(alpha=self.ce_weight, gamma=2.0)
 
     def forward(self, outputs, labels, timestamps):
         """
@@ -84,8 +70,11 @@ class DETRLoss(nn.Module):
         if len(batch_idx) > 0:
             target_classes[batch_idx, query_idx] = class_ids
 
-        # Classification Loss (Cross Entropy applied to ALL queries)
-        loss_ce = F.cross_entropy(pred_logits.transpose(1, 2), target_classes, weight=self.ce_weight)
+        # Classification Loss (Focal Loss/Cross Entropy applied to ALL queries)
+        if self.use_focal_loss:
+            loss_class = self.focal_loss(pred_logits.transpose(1, 2), target_classes)
+        else:
+            loss_class = F.cross_entropy(pred_logits.transpose(1, 2), target_classes, weight=self.ce_weight)
 
         # Regression Time Loss (L1 applied only to MATCHED queries)
         if len(batch_idx) > 0:
@@ -96,6 +85,6 @@ class DETRLoss(nn.Module):
             loss_time = torch.tensor(0.0, device=pred_logits.device)
 
         # Total Loss
-        total_loss = loss_ce + self.time_weight * loss_time
+        total_loss = loss_class + self.time_weight * loss_time
 
         return total_loss
