@@ -19,7 +19,7 @@ from tabulate import tabulate
 from util.io import load_json, store_json, save_video
 from util.eval_spotting import evaluate, generate_qualitative_results
 from dataset.datasets import get_datasets
-from model.model_spotting import Model
+from model import get_model
 
 BACKGROUND_LABEL = "BACKGROUND"
 
@@ -52,6 +52,8 @@ def update_args(args, config):
     args.num_workers = config['num_workers']
     args.use_early_stopping = config["use_early_stopping"]
     args.early_stopping_patience = config["early_stopping_patience"]
+
+    args.model_type = config.get("model_type", "baseline")
 
     # LR
     args.backbone_learning_rate = config["backbone_learning_rate"]
@@ -171,7 +173,7 @@ def main(args):
     )
 
     # Model
-    model = Model(args=args)
+    model = get_model(args=args)
 
     optimizer, scaler = model.get_optimizer()
 
