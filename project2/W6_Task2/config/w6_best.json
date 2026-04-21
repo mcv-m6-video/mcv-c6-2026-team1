@@ -9,7 +9,7 @@
     "stride": 2,
     "dataset": "soccernetball",
     "epoch_num_frames": 500000,
-    "feature_arch": "x3d_m",
+    "feature_arch": "rny008",
     "backbone_learning_rate": 0.0008,
     "head_learning_rate": 0.0008,
     "num_classes": 12,
@@ -38,8 +38,5 @@
     "gru_hidden_dim": 368,
     "gru_layers": 1,
     "gru_dropout": 0.1,
-    "gru_bidirectional": true,
-
-    "model_type": "x3d",
-    "tolerance": 1.0
+    "gru_bidirectional": true
 }

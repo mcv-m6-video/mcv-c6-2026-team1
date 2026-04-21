@@ -13,7 +13,7 @@ Instructions on running the baseline and our best model are detailed next.
 python main_spotting.py --model <model_name>
 ```
 
-Here, `<model_name>` can be chosen freely but must match the name of a configuration file (e.g. `baseline.json`) located in the config directory [config](./config/). For example, to chose the baseline model, you would run
+Here, `<model_name>` can be chosen freely but must match the name of a configuration file (e.g. `baseline.json`) located in the config directory [config](./config/). For example, to choose the baseline model, you would run
 
 ```
 python main_spotting.py --model baseline
@@ -21,7 +21,7 @@ python main_spotting.py --model baseline
 
 For additional details on configuration options using the configuration file, refer to the README in the [config](./config/) directory.
 
-## Running our best model
+## Running our best models
 
 First, weights must be downloaded. Modify `SAVE_DIR` within `get_best_weights.sh` so that it points to your save directory (the same used in the [config](./config/) files). Then, run the script:
 
@@ -29,9 +29,10 @@ First, weights must be downloaded. Modify `SAVE_DIR` within `get_best_weights.sh
 ./get_best_weights.sh
 ```
 
-After that, just run the code with the `best` model:
+After that, just run the code with our `w6_best` or `best` models:
 
 ```
+python main_spotting.py --model w6_best
 python main_spotting.py --model best
 ```
 
