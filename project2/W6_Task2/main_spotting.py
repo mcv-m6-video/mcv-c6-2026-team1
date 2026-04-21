@@ -55,6 +55,7 @@ def update_args(args, config):
 
     args.model_type = config.get("model_type", "baseline")
     args.tolerance = config.get("tolerance", 1.0)
+    args.maintain_temporal = config.get("maintain_temporal", True)
 
     # LR
     args.backbone_learning_rate = config["backbone_learning_rate"]

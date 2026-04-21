@@ -41,5 +41,6 @@
     "gru_bidirectional": true,
 
     "model_type": "x3d",
-    "tolerance": 1.0
+    "tolerance": 1.0,
+    "maintain_temporal": false
 }

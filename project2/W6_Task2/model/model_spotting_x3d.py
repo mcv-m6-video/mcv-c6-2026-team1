@@ -38,11 +38,31 @@ class Model(BaseRGBModel):
                 features = x3d_l(pretrained=True)
             else:
                 raise NotImplementedError(self._feature_arch)
-            
+
+            if args.maintain_temporal:
+                print(">> Using default X3D to maintain full temporal resolution (L)")
+            else:
+                print(">> Added 1D convs to reduce temporal reduction (L')")
+
             feat_dim = 192  # X3D-S/M/L output feature dimension after block 4
             self._backbone_dim = feat_dim
             self._features = features
-
+            
+            # The bottleneck for T -> T' -> T if not maintaining temporal resolution
+            if not self.args.maintain_temporal:
+                self.temporal_bottleneck = nn.Sequential(
+                    # Encode: T=50 -> T'=10
+                    # (50 + 2*2 - 5)//5 + 1 = 10
+                    nn.Conv1d(self._backbone_dim, self._backbone_dim, kernel_size=5, stride=5, padding=2),
+                    nn.BatchNorm1d(self._backbone_dim),
+                    nn.ReLU(),
+                    # Decode: T'=10 -> T=50
+                    # (10 - 1)*5 - 2*0 + 5 = 50
+                    nn.ConvTranspose1d(self._backbone_dim, self._backbone_dim, kernel_size=5, stride=5, padding=0),
+                    nn.BatchNorm1d(self._backbone_dim),
+                    nn.ReLU()
+                )
+            
             # Temporal transformer
             if self.args.temporal_model == "transformer":
                 self._temporal_model = TemporalTransformer(
@@ -104,6 +124,11 @@ class Model(BaseRGBModel):
             # Pool only spatial dims, keep temporal dim
             x = F.adaptive_avg_pool3d(x, (x.size(2), 1, 1))  # [B, D, T, 1, 1]
             x = x.squeeze(-1).squeeze(-1)                    # [B, D, T]
+
+            # Optional temporal bottleneck to reduce temporal resolution (T -> T' -> T)
+            if not self.args.maintain_temporal:
+                x = self.temporal_bottleneck(x)
+
             im_feat = x.permute(0, 2, 1)                     # [B, T, D]
 
             # Apply model to encode temporality
