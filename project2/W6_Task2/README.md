@@ -7,7 +7,7 @@ Instructions on running the baseline and our best model are detailed next.
 
 ## Running the code
 
-`main_spotting.py` is designed to train and evaluate the baseline using the settings specified in a configuration file. You can run `main_spotting.py` using the following command:
+`main_spotting.py` is designed to train and evaluate the baseline using the settings specified in a configuration file. You can run it using the following command:
 
 ```
 python main_spotting.py --model <model_name>

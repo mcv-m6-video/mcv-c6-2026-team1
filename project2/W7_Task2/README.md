@@ -15,7 +15,7 @@ python main_spotting.py --model <model_name>
 
 Here, `<model_name>` can be chosen freely but must match the name of a configuration file located in the [config](./config/) directory. 
 
-To choose our best DETR model (which gives pretty bad results), you first need to download the weights. Modify `SAVE_DIR` within `get_best_weights.sh` so that it points to your save directory (the same used in the [config](./config/) files). Then, run the script:
+To choose our best DETR model (which gives pretty bad results), you first need to download the weights. Modify `SAVE_DIR` within `get_detr_weights.sh` so that it points to your save directory (the same used in the [config](./config/) files). Then, run the script:
 
 ```
 ./get_detr_weights.sh
