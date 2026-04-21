@@ -13,27 +13,21 @@ Instructions on running our DETR-based model are detailed next.
 python main_spotting.py --model <model_name>
 ```
 
-Here, `<model_name>` can be chosen freely but must match the name of a configuration file (e.g. `detr_baseline.json`) located in the config directory [config](./config/). For example, to chose the baseline model, you would run
+Here, `<model_name>` can be chosen freely but must match the name of a configuration file located in the [config](./config/) directory. 
+
+To choose our best DETR model (which gives pretty bad results), you first need to download the weights. Modify `SAVE_DIR` within `get_best_weights.sh` so that it points to your save directory (the same used in the [config](./config/) files). Then, run the script:
 
 ```
-python main_spotting.py --model detr_baseline
+./get_detr_weights.sh
+```
+
+After that, just run the code with the `detr` model:
+
+```
+python main_spotting.py --model detr
 ```
 
 For additional details on configuration options using the configuration file, refer to the README in the [config](./config/) directory.
-
-## Running our best model
-
-First, weights must be downloaded. Modify `SAVE_DIR` within `get_best_weights.sh` so that it points to your save directory (the same used in the [config](./config/) files). Then, run the script:
-
-```
-./get_best_weights.sh
-```
-
-After that, just run the code with the `best` model:
-
-```
-python main_spotting.py --model best
-```
 
 ## Important notes
 

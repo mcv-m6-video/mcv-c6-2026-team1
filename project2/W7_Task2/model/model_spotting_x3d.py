@@ -47,11 +47,12 @@ class Model(BaseRGBModel):
             self.embed_dim = 192  # X3D-S/M/L output feature dimension after block 4
 
             # Define a 1D Convolutional neck for L -> L' reduction if not maintaining temporal resolution
-            self.temporal_aggregation = nn.Sequential(
-                nn.Conv1d(self.embed_dim, self.embed_dim, kernel_size=3, stride=2, padding=1),
-                nn.BatchNorm1d(self.embed_dim),
-                nn.ReLU()
-            )
+            if not self.args.maintain_temporal:
+                self.temporal_aggregation = nn.Sequential(
+                    nn.Conv1d(self.embed_dim, self.embed_dim, kernel_size=3, stride=2, padding=1),
+                    nn.BatchNorm1d(self.embed_dim),
+                    nn.ReLU()
+                )
 
             # Temporal DETR model
             self._detr = TemporalDETR(
