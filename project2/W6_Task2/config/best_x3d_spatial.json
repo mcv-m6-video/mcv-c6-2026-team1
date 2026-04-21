@@ -1,5 +1,5 @@
 {
-    "frame_dir": "./../SoccerNet/SN-BAS-2025-FRAMES/398x224",
+    "frame_dir": "./../SoccerNet/SN-BAS-2025-FRAMES/597x336",
     "save_dir": "./../SoccerNet/SN-BAS-2025-SAVE_DIR",
     "labels_dir": "./../SoccerNet/SN-BAS-2025",
     "store_mode": "load",

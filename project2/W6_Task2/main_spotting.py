@@ -54,6 +54,7 @@ def update_args(args, config):
     args.early_stopping_patience = config["early_stopping_patience"]
 
     args.model_type = config.get("model_type", "baseline")
+    args.tolerance = config.get("tolerance", 1.0)
 
     # LR
     args.backbone_learning_rate = config["backbone_learning_rate"]
@@ -235,7 +236,7 @@ def main(args):
     model.load(torch.load(os.path.join(args.run_dir, 'checkpoint_best.pt')))
 
     # Evaluation on test split
-    map_score, ap_score = evaluate(model, test_video_data)
+    map_score, ap_score = evaluate(model, test_video_data, args.tolerance)
 
     # Model stats
     macs, params = model.get_stats()

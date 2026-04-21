@@ -17,7 +17,7 @@ from dataset.frame import FPS_SN
 #Constants
 INFERENCE_BATCH_SIZE = 4
 
-def evaluate(model, dataset, batch_size=INFERENCE_BATCH_SIZE, nms_window = 5):
+def evaluate(model, dataset, tolerance=1.0, batch_size=INFERENCE_BATCH_SIZE, nms_window = 5):
     
     pred_dict = {}
     for video, video_len, _ in dataset.videos:
@@ -92,7 +92,7 @@ def evaluate(model, dataset, batch_size=INFERENCE_BATCH_SIZE, nms_window = 5):
 
     # Compute the performances
     mAP, AP_per_class, _, _, _, _ = (
-        average_mAP(targets_numpy, detections_numpy, closests_numpy, FPS_SN / dataset._stride, deltas=np.array([1]))
+        average_mAP(targets_numpy, detections_numpy, closests_numpy, FPS_SN / dataset._stride, deltas=np.array([tolerance]))
     )
 
     return mAP, AP_per_class
