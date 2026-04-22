@@ -18,7 +18,7 @@ Refer to the README files in the `data/soccernetball` directory within each task
 
 ## Project Structure
 
-`TaskX/` contains everything developed during task `X`. Data should be downloaded in the project root.
+`WX_TaskY/` contains everything developed during week `X` for task `Y`. Data should be downloaded in the project root.
 
 ```bash
 project2/
@@ -30,7 +30,7 @@ project2/
 ├── requirements.txt
 ├── setup.sh               # Script to setup the environment
 ├── SoccerNet/             # Project data
-├── TaskX/
+├── WX_TaskY/
 │   ├── ...
-└── └── README.md          # Documentation for Task X
+└── └── README.md          # Documentation for Week X
 ```
