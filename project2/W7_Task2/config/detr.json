@@ -14,7 +14,7 @@
     "only_test": true,
     "qualitatives": true,
     "print_debug": true,
-    "tolerance": 5.0,
+    "tolerance": 1.0,
     "device": "cuda",
     "num_workers": 4,
     "use_ap10": true,
