@@ -1,6 +1,6 @@
 # MCV C6 Project 2: Ball Action Classification & Spotting (Team 1)
 
-<!-- <a href="CURRENTLY_UNAVAILABLE"><b>Final Presentation Link</b></a> -->
+<a href="https://docs.google.com/presentation/d/1NDdARKTsPzL3hPxtixxzdKtxFjQSCqWHMYrkn-1ncvY/edit?usp=drive_link"><b>Final Presentation Link</b></a>
 
 ## Quick Setup
 
